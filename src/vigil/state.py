@@ -87,7 +87,7 @@ class SessionState:
 
 
 def load_risk_seeds() -> dict[str, dict]:
-    """data/risk.json — written by `algo enter` / `algo arm` / `algo add`, or by the
+    """data/risk.json — written by `vigil enter` / `vigil arm` / `vigil add`, or by the
     Claude skill for MCP-placed entries:
     {"INDIGO": {"sl_pct": 0.01, "pdh": 4205.0, "pdl": 4080.0}, ...}"""
     if config.RISK_FILE.exists():

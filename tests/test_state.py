@@ -1,8 +1,8 @@
 """Reconciliation and restart-recovery tests."""
 import json
 
-from algo import config, state as state_mod
-from algo.state import SessionState, TrackedPosition
+from vigil import config, state as state_mod
+from vigil.state import SessionState, TrackedPosition
 
 
 def _pos_row(symbol, qty, buy=0.0, sell=0.0):

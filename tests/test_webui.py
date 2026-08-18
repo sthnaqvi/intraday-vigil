@@ -7,7 +7,7 @@ Two things must hold no matter what the browser sends:
 """
 import pytest
 
-from algo import webui
+from vigil import webui
 
 
 @pytest.fixture(autouse=True)
@@ -49,7 +49,7 @@ def test_wrong_confirmation_is_refused(_never_really_run):
 def test_correct_confirmation_is_accepted(_never_really_run):
     r = webui.run_command("exit", {"symbol": "HCLTECH"}, confirm="hcltech")  # case-insensitive
     assert r["ok"] is True
-    assert _never_really_run[0][1:] == ["-m", "algo", "exit", "HCLTECH", "--yes"]
+    assert _never_really_run[0][1:] == ["-m", "vigil", "exit", "HCLTECH", "--yes"]
 
 
 def test_squareoff_needs_the_literal_word(_never_really_run):
@@ -101,7 +101,7 @@ def test_enter_builds_the_expected_argv(_never_really_run):
                                 "sl_pct": 0.91, "pdh": 1320.8, "pdl": 1298.1},
                       confirm="RELIANCE")
     argv = _never_really_run[0]
-    assert argv[1:] == ["-m", "algo", "enter", "RELIANCE", "--side", "long",
+    assert argv[1:] == ["-m", "vigil", "enter", "RELIANCE", "--side", "long",
                         "--qty", "590", "--sl-pct", "0.91",
                         "--pdh", "1320.8", "--pdl", "1298.1", "--yes"]
 
@@ -123,7 +123,7 @@ def test_empty_optional_flags_are_dropped(_never_really_run):
 
 def test_quote_accepts_several_symbols(_never_really_run):
     webui.run_command("quote", {"symbols": "hcltech infy"}, None)
-    assert _never_really_run[0][1:] == ["-m", "algo", "quote", "HCLTECH", "INFY"]
+    assert _never_really_run[0][1:] == ["-m", "vigil", "quote", "HCLTECH", "INFY"]
 
 
 def test_skill_modes_are_prompts_not_commands():
@@ -141,7 +141,7 @@ def test_log_sources_are_whitelisted_no_traversal():
 
 
 def test_read_log_tails_and_reports_total(tmp_path, monkeypatch):
-    from algo import config
+    from vigil import config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
     (tmp_path / "algo.log").write_text("\n".join(f"line{i}" for i in range(500)))
     r = webui.read_log("algo.log", lines=10)
@@ -151,14 +151,14 @@ def test_read_log_tails_and_reports_total(tmp_path, monkeypatch):
 
 
 def test_read_log_missing_file_is_not_an_error(tmp_path, monkeypatch):
-    from algo import config
+    from vigil import config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
     r = webui.read_log("api.jsonl")
     assert r["ok"] is True and "does not exist" in r["text"]
 
 
 def test_read_log_caps_requested_lines(tmp_path, monkeypatch):
-    from algo import config
+    from vigil import config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
     (tmp_path / "algo.log").write_text("x\n" * 20)
     assert webui.read_log("algo.log", lines=10**9)["ok"] is True
@@ -175,7 +175,7 @@ def test_page_carries_the_version_placeholder():
 
 def test_every_command_is_logged_with_one_trace(tmp_path, monkeypatch, _never_really_run):
     """A dashboard click must leave a request record and a result record, same trace."""
-    from algo import audit, config
+    from vigil import audit, config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
     r = webui.run_command("status", {}, None)
     rows = [__import__("json").loads(l)
@@ -188,7 +188,7 @@ def test_every_command_is_logged_with_one_trace(tmp_path, monkeypatch, _never_re
 
 def test_refused_command_is_still_auditable(tmp_path, monkeypatch, _never_really_run):
     """A refusal is exactly what you need in the log when debugging 'nothing happened'."""
-    from algo import config
+    from vigil import config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
     webui.run_command("exit", {"symbol": "HCLTECH"}, confirm="WRONG")
     # refused before spawning, so nothing ran — and nothing may be claimed to have run
@@ -201,7 +201,7 @@ def test_refused_command_is_still_auditable(tmp_path, monkeypatch, _never_really
 
 def test_trace_propagates_to_the_child_process(_never_really_run, monkeypatch):
     """The subprocess must inherit ALGO_TRACE_ID or the trail breaks at the boundary."""
-    from algo import audit
+    from vigil import audit
     seen = {}
 
     def capture(argv, **kw):
@@ -249,7 +249,7 @@ def test_account_reports_client_id_and_funds(monkeypatch):
                                "utilised": {"debits": 78924.5, "m2m_unrealised": -1690.9,
                                             "m2m_realised": 0}}}
 
-    monkeypatch.setattr("algo.auth.get_kite", lambda: FakeKite())
+    monkeypatch.setattr("vigil.auth.get_kite", lambda: FakeKite())
     a = webui.account_snapshot(force=True)
     assert a["ok"] and a["client_id"] == "PKR985"
     assert a["available"] == 316282.7 and a["used"] == 78924.5
@@ -269,14 +269,14 @@ def test_account_prefers_live_balance_over_zero_cash(monkeypatch):
                                "available": {"cash": 0, "live_balance": 400.0},
                                "utilised": {}}}
 
-    monkeypatch.setattr("algo.auth.get_kite", lambda: FakeKite())
+    monkeypatch.setattr("vigil.auth.get_kite", lambda: FakeKite())
     assert webui.account_snapshot(force=True)["available"] == 400.0
 
 
 def test_dead_token_is_a_display_state_not_a_crash(monkeypatch):
     """A dead Kite token must never take the dashboard down."""
     _reset_account_cache()
-    monkeypatch.setattr("algo.auth.get_kite",
+    monkeypatch.setattr("vigil.auth.get_kite",
                         lambda: (_ for _ in ()).throw(RuntimeError("token expired")))
     a = webui.account_snapshot(force=True)
     assert a["ok"] is False and "token expired" in a["error"]
@@ -294,7 +294,7 @@ def test_account_is_cached_so_polling_does_not_hammer_kite(monkeypatch):
             calls["n"] += 1
             return {"equity": {}}
 
-    monkeypatch.setattr("algo.auth.get_kite", lambda: FakeKite())
+    monkeypatch.setattr("vigil.auth.get_kite", lambda: FakeKite())
     for _ in range(10):
         webui.account_snapshot()
     assert calls["n"] == 1, "the 3s poll must not become 10 Kite calls"

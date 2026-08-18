@@ -11,10 +11,10 @@ commit message — not an incidental side effect of moving code around.
 """
 import json
 
-from algo.broker import Broker
-from algo.events import EventLog
-from algo.monitor import MonitorLoop
-from algo.state import SessionState
+from vigil.broker import Broker
+from vigil.events import EventLog
+from vigil.monitor import MonitorLoop
+from vigil.state import SessionState
 from tests.mock_kite import MockKite
 from tests.test_monitor import _now
 
@@ -71,7 +71,7 @@ def test_golden_session_replay(tmp_path):
     loop.cycle()
 
     # --- position 2: SBIN long, discovered with NO resting SL — seeded via risk.json ---
-    from algo import config
+    from vigil import config
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     config.RISK_FILE.write_text(json.dumps({"SBIN": {"sl_pct": 0.01}}))
     kite.set_position("SBIN", 200, buy_price=800.0)

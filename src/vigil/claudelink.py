@@ -7,8 +7,8 @@ Two delivery paths, deliberately:
    dormant — but it lights up the moment one appears, with no code change.
 
 2. **Queue (always).** Every request is appended to `data/claude-requests.jsonl` regardless.
-   A Claude session reads pending items with `algo ask --pending` and writes answers back
-   with `algo ask --answer <id> --text ...`.
+   A Claude session reads pending items with `vigil ask --pending` and writes answers back
+   with `vigil ask --answer <id> --text ...`.
 
 The queue is the contract. The CLI is an optimisation on top of it.
 """

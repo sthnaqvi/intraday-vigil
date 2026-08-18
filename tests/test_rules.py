@@ -4,8 +4,8 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from algo import rules
-from algo.rules import Direction
+from vigil import rules
+from vigil.rules import Direction
 
 IST = ZoneInfo("Asia/Kolkata")
 

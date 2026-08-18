@@ -1,6 +1,6 @@
 """Kite Connect daily token flow.
 
-`algo login` opens the browser at kite's login URL; Zerodha redirects to
+`vigil login` opens the browser at kite's login URL; Zerodha redirects to
 http://127.0.0.1:3100/kite-token-exchange?request_token=... which a one-shot local HTTP
 server captures. `--paste` fallback: user pastes the full redirected URL.
 
@@ -124,7 +124,7 @@ def login(paste: bool = False, force: bool = False) -> str:
             raise AuthError(
                 "Login not captured within 15 minutes. If the redirect URL of your Kite app "
                 f"is not http://127.0.0.1:{config.LOGIN_LISTEN_PORT}{config.LOGIN_REDIRECT_PATH}, "
-                "fix it at developers.kite.trade or retry with: algo login --paste"
+                "fix it at developers.kite.trade or retry with: vigil login --paste"
             )
 
     session = kite.generate_session(request_token, api_secret=api_secret)
@@ -139,10 +139,10 @@ def get_kite() -> KiteConnect:
     api_key, _ = _credentials()
     token = _load_token(api_key)
     if not token:
-        raise AuthError("No valid token for today — run: algo login")
+        raise AuthError("No valid token for today — run: vigil login")
     kite = KiteConnect(api_key=api_key, access_token=token)
     try:
         kite.profile()
     except Exception as e:
-        raise AuthError(f"Stored token rejected by Kite ({e}) — run: algo login") from e
+        raise AuthError(f"Stored token rejected by Kite ({e}) — run: vigil login") from e
     return kite

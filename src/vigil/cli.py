@@ -45,11 +45,11 @@ def cmd_start(args) -> int:
     """One command for the morning: login if needed, then run the daemon detached."""
     auth.login(paste=args.paste)  # fast-path returns instantly on a valid token
     if (pid := _daemon_pid()) is not None:
-        print(f"Daemon already running (pid {pid}). `algo status` to inspect.")
+        print(f"Daemon already running (pid {pid}). `vigil status` to inspect.")
         return 0
     config.LOGS_DIR.mkdir(parents=True, exist_ok=True)
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
-    cmd = [sys.executable, "-m", "algo", "monitor"]
+    cmd = [sys.executable, "-m", "vigil", "monitor"]
     if args.dry_run:
         cmd.append("--dry-run")
     if args.force:
@@ -74,8 +74,8 @@ def cmd_start(args) -> int:
 
     mode = "DRY RUN" if args.dry_run else "LIVE"
     print(f"Daemon started ({mode}, pid {proc.pid}). It waits for the 09:15 bell if early,\n"
-          f"squares off at 15:05, and exits on its own. `algo status` any time; "
-          f"`algo stop` to halt.")
+          f"squares off at 15:05, and exits on its own. `vigil status` any time; "
+          f"`vigil stop` to halt.")
     return 0
 
 
@@ -130,7 +130,7 @@ def cmd_positions(args) -> int:
 
 def cmd_status(args) -> int:
     if not config.STATUS_FILE.exists():
-        print("No status.json yet — start the daemon with: algo start")
+        print("No status.json yet — start the daemon with: vigil start")
         return 1
     raw = config.STATUS_FILE.read_text()
     if args.json:
@@ -158,8 +158,8 @@ def cmd_status(args) -> int:
     if naked:
         for p in naked:
             print(f"*** UNPROTECTED: {p['symbol']} {p['qty']} {p['direction']} — SL order "
-                  f"{p.get('sl_order_status')}. `algo protect {p['symbol']}` or "
-                  f"`algo exit {p['symbol']}` ***")
+                  f"{p.get('sl_order_status')}. `vigil protect {p['symbol']}` or "
+                  f"`vigil exit {p['symbol']}` ***")
 
     live = triggers_mod.armed(triggers_mod.load())
     if live:
@@ -216,7 +216,7 @@ def cmd_monitor(args) -> int:
               "Linux notify-send). A live daemon with no notifier gives you zero alerts "
               "for SL hits, unprotected positions, or token expiry.\n"
               "Fix: install a notifier, or run with --allow-silent to accept running "
-              "silent (you'll need to watch `algo status` / the dashboard yourself).",
+              "silent (you'll need to watch `vigil status` / the dashboard yourself).",
               file=sys.stderr)
         return 3
     broker, events = _live_broker(dry_run=args.dry_run)
@@ -265,7 +265,7 @@ def cmd_enter(args) -> int:
     t = triggers_mod.Trigger(
         symbol=args.symbol.upper(), direction=direction.value, level=0.0, side="above",
         qty=args.qty, sl_pct=sl_pct, pdh=args.pdh, pdl=args.pdl, auto=True,
-        note="manual algo enter",
+        note="manual vigil enter",
     )
     ltp = 0.0
     try:
@@ -325,7 +325,7 @@ def cmd_arm(args) -> int:
     if not _daemon_pid():
         print("NOTE: daemon is not running — start it so the WebSocket watches this.")
     else:
-        print("Restart the daemon (`algo stop && algo start`) to subscribe to this symbol.")
+        print("Restart the daemon (`vigil stop && vigil start`) to subscribe to this symbol.")
     return 0
 
 
@@ -378,7 +378,7 @@ def cmd_add(args) -> int:
 
     pos = _open_position(broker, symbol)
     if pos is None:
-        print(f"No open MIS position in {symbol}. Use `algo enter` to open one.",
+        print(f"No open MIS position in {symbol}. Use `vigil enter` to open one.",
               file=sys.stderr)
         return 3
 
@@ -457,7 +457,7 @@ def cmd_exit(args) -> int:
         print(f"{symbol}: exit filled — position FLAT.")
     else:
         print(f"{symbol}: exit sent, still showing {abs(still['quantity'])} open. "
-              "Re-check with `algo positions`.")
+              "Re-check with `vigil positions`.")
     return 0
 
 
@@ -481,7 +481,7 @@ def cmd_ask(args) -> int:
             print(f"Q: {r['question']}")
             if r.get("context", {}).get("positions"):
                 print(f"   context: {json.dumps(r['context']['positions'])[:200]}")
-        print(f"\nAnswer with: algo ask --answer <id> --text \"...\"")
+        print(f"\nAnswer with: vigil ask --answer <id> --text \"...\"")
         return 0
 
     if args.answer:
@@ -509,7 +509,7 @@ def cmd_ask(args) -> int:
         print(req["answer"])
     else:
         print(f"Queued as {req['id']} — no claude CLI on this machine, so a Claude session "
-              f"must pick it up with `algo ask --pending`.")
+              f"must pick it up with `vigil ask --pending`.")
     return 0
 
 
@@ -540,7 +540,7 @@ def cmd_protect(args) -> int:
     if sl_pct is None:
         sl_pct = float(seed["sl_pct"]) if "sl_pct" in seed else (tp.sl_pct if tp else None)
     if sl_pct is None:
-        print(f"No sl_pct for {symbol} — pass --sl-pct or seed it with `algo add-position`.",
+        print(f"No sl_pct for {symbol} — pass --sl-pct or seed it with `vigil add-position`.",
               file=sys.stderr)
         return 3
     if sl_pct > 0.015:
@@ -562,7 +562,7 @@ def cmd_protect(args) -> int:
         tp.sl_order_id, tp.sl_price = new_id, trigger   # same trade: keep phase/breakeven
         session.save()
     events.emit("SL_REPLACED", symbol, new_order_id=new_id, trigger=trigger, quantity=qty,
-                note="manual algo protect")
+                note="manual vigil protect")
     print(f"{symbol}: SL-M placed, order {new_id}, trigger {trigger}, qty {qty}")
     return 0
 
@@ -603,7 +603,7 @@ def cmd_squareoff(args) -> int:
 
 def main(argv: list[str] | None = None) -> int:
     setup_logging()
-    p = argparse.ArgumentParser(prog="algo", description="Intraday SL-lifecycle daemon (Zerodha Kite)")
+    p = argparse.ArgumentParser(prog="vigil", description="Intraday SL-lifecycle daemon (Zerodha Kite)")
     sub = p.add_subparsers(dest="cmd", required=True)
 
     sp = sub.add_parser("start", help="morning one-shot: login if needed + run daemon in background")

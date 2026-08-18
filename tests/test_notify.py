@@ -10,7 +10,7 @@ import importlib
 
 import pytest
 
-from algo import notify
+from vigil import notify
 
 
 @pytest.fixture(autouse=True)

@@ -290,7 +290,7 @@ class TriggerWatcher:
                             f"{symbol} hit {t.level} (ltp {ltp}).\n\n"
                             f"Ready: {t.direction} {t.qty} @ market, SL {t.sl_pct:.2%}.\n"
                             "Auto-execute is OFF, so nothing was placed. "
-                            f"Run: algo enter {symbol} --side {t.direction.lower()} "
+                            f"Run: vigil enter {symbol} --side {t.direction.lower()} "
                             f"--qty {t.qty} --sl-pct {t.sl_pct * 100:.2f}"
                         )
                         notify(f"{symbol} hit {t.level} — NOT placed (auto off)", sound=True)

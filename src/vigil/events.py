@@ -10,7 +10,7 @@ from typing import Any
 
 from . import clock, config
 
-logger = logging.getLogger("intraday-algo")
+logger = logging.getLogger("vigil")
 
 
 def setup_logging() -> None:

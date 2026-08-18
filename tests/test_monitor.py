@@ -2,10 +2,10 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
-from algo.broker import Broker
-from algo.events import EventLog
-from algo.monitor import MonitorLoop
-from algo.state import SessionState
+from vigil.broker import Broker
+from vigil.events import EventLog
+from vigil.monitor import MonitorLoop
+from vigil.state import SessionState
 from tests.mock_kite import MockKite
 
 IST = ZoneInfo("Asia/Kolkata")
@@ -119,7 +119,7 @@ def test_rejected_modify_replaces_dead_sl(tmp_path):
 def test_unprotected_position_gets_sl_from_seed(tmp_path):
     import json
 
-    from algo import config
+    from vigil import config
 
     kite = MockKite()
     kite.set_position("SBIN", 200, buy_price=800.0)  # no SL order at all
@@ -163,7 +163,7 @@ def test_dry_run_never_mutates(tmp_path):
 
 
 def test_status_snapshot_contract(tmp_path):
-    from algo import config
+    from vigil import config
 
     kite = MockKite()
     seed_indigo_long(kite)

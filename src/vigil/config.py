@@ -4,13 +4,13 @@ from datetime import time
 from pathlib import Path
 
 # PROJECT_ROOT is the source checkout directory. It is used ONLY to give a subprocess a
-# working directory when spawning `python -m algo ...` (cli.py, webui.py) — it must never
+# working directory when spawning `python -m vigil ...` (cli.py, webui.py) — it must never
 # be the base for anything this process WRITES. A pip-installed package's __file__ lives
 # inside site-packages; deriving state paths from it would write a live broker access
 # token, the daily P&L log, and armed order triggers into the install directory. That
 # used to be exactly what DATA_DIR/LOGS_DIR/ENV_FILE/TOKEN_FILE did below, which is why
 # this file was unpippable before this change.
-PROJECT_ROOT = Path(__file__).resolve().parent.parent
+PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 
 def _state_dir() -> Path:
@@ -60,7 +60,7 @@ KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries
 # should the daemon re-place it automatically? Default False: on 2026-08-18 the user
 # cancelled a stop deliberately, and silently re-placing it would have overridden a decision
 # they had just made. Detection and a loud, repeating alert are unconditional either way;
-# `algo protect SYMBOL` re-places on demand.
+# `vigil protect SYMBOL` re-places on demand.
 AUTO_REPROTECT = False
 
 # Session times (IST)

@@ -8,7 +8,7 @@ import types
 
 import pytest
 
-from algo import cli, notify
+from vigil import cli, notify
 
 
 class _Args(types.SimpleNamespace):
@@ -54,9 +54,9 @@ def test_live_monitor_proceeds_when_a_notifier_is_available(monkeypatch):
 
 
 def test_start_forwards_allow_silent_to_the_spawned_daemon(monkeypatch, tmp_path):
-    """`algo start` spawns `algo monitor` as a subprocess — the flag must cross that
+    """`vigil start` spawns `vigil monitor` as a subprocess — the flag must cross that
     boundary or --allow-silent on `start` would be a lie."""
-    from algo import config
+    from vigil import config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path / "logs")
     monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
     monkeypatch.setattr(config, "PID_FILE", tmp_path / "data" / "daemon.pid")

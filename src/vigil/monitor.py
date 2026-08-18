@@ -230,7 +230,7 @@ class MonitorLoop:
                 self.events.emit("WARNING", symbol,
                                 message="position has NO SL and no sl_pct seed — cannot protect")
                 alert_dialog(f"{symbol} is UNPROTECTED (no SL order, no risk.json seed). "
-                             "Add one: algo add-position " + symbol + " --sl-pct 1.0")
+                             "Add one: vigil add-position " + symbol + " --sl-pct 1.0")
 
         # 1b. Tracked position whose SL vanished. Alert EVERY cycle — this is the loudest
         # condition the daemon has, because the position is naked until someone acts.
@@ -258,8 +258,8 @@ class MonitorLoop:
                 alert_dialog(
                     f"{symbol} is UNPROTECTED — {lost['qty']} {lost['direction']} with no "
                     f"stop (order {lost['sl_order_id']} is {lost['status']}).\n\n"
-                    f"Re-place it:  algo protect {symbol}\n"
-                    f"Or exit now:  algo exit {symbol}"
+                    f"Re-place it:  vigil protect {symbol}\n"
+                    f"Or exit now:  vigil exit {symbol}"
                 )
                 notify(f"{symbol} HAS NO STOP — {lost['qty']} shares naked", sound=True)
 
@@ -313,7 +313,7 @@ class MonitorLoop:
                            sound=True)
 
         # 3b. Armed triggers. Keep the socket subscription in step with what is armed,
-        # so `algo arm` takes effect without a daemon restart, then run the poll as the
+        # so `vigil arm` takes effect without a daemon restart, then run the poll as the
         # fallback for a dropped socket.
         self._sync_trigger_subscriptions()
         self._poll_triggers()
@@ -429,7 +429,7 @@ class MonitorLoop:
     def _sync_trigger_subscriptions(self) -> None:
         """Restart the tick subscription when the armed set changes.
 
-        Without this, `algo arm` only took effect after a full daemon restart — and a
+        Without this, `vigil arm` only took effect after a full daemon restart — and a
         restart with a live position is exactly what we want to avoid.
         """
         if self.broker.dry_run:
@@ -534,7 +534,7 @@ class MonitorLoop:
                     self.session.fired.append("token_alerted")
                     alert_dialog(
                         "Kite token expired mid-session. Broker SLs still protect positions. "
-                        "Run `algo login` in another terminal — the daemon will keep retrying."
+                        "Run `vigil login` in another terminal — the daemon will keep retrying."
                     )
                 interval = 60
             except KeyboardInterrupt:

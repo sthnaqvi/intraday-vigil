@@ -3,7 +3,7 @@ import json
 
 import pytest
 
-from algo import claudelink, config
+from vigil import claudelink, config
 
 
 @pytest.fixture(autouse=True)

@@ -1,0 +1,29 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "vigil"
+version = "0.1.0.dev0"
+description = "Bell-to-bell intraday trading, watched."
+requires-python = ">=3.11"
+dependencies = [
+    "python-dotenv>=1.0",
+]
+
+# Full ruff/mypy/optional-dependencies/entry-points/classifiers config lands in
+# Stage 10 alongside CI. This file exists right now only so `pip install -e .`
+# makes `import vigil` and `python -m vigil` resolve identically whether you're
+# running pytest (conftest.py points sys.path at src/ directly) or the CLI for
+# real — the src/ layout move (Stage 3) would otherwise leave `python -m vigil`
+# broken outside the test suite.
+
+[project.optional-dependencies]
+kite = ["kiteconnect>=5.2"]
+dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+
+[project.scripts]
+vigil = "vigil.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/vigil"]

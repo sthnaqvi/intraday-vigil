@@ -1,4 +1,4 @@
-# intraday-algo
+# vigil
 
 Deterministic SL-lifecycle daemon for Zerodha Kite intraday (MIS) positions.
 Replaces the AI-driven monitor loop of the `intraday-trader` Claude skill: the
@@ -28,7 +28,7 @@ Spec source of truth: `~/.claude/skills/intraday-trader/references/sl-rules.md`.
 6. Writes `data/status.json` (snapshot) and `data/events-<date>.jsonl` (audit
    log for post-session RCA), and sends a desktop notification on every
    transition (macOS via osascript, Linux via notify-send, otherwise a
-   terminal fallback — see `algo start --allow-silent` if neither is
+   terminal fallback — see `vigil start --allow-silent` if neither is
    available and you accept running without alerts).
 
 Safety: modify results are verified before state advances; a rejected/dead SL
@@ -52,13 +52,13 @@ At https://developers.kite.trade set the app's **redirect URL** to
 **Full guide: [docs/USAGE.md](docs/USAGE.md)** — login to advanced, one place.
 
 ```
-.venv/bin/python -m algo start          # the whole morning in one command:
+.venv/bin/python -m vigil start          # the whole morning in one command:
                                         #   login (skipped if token valid) + background daemon
-.venv/bin/python -m algo status         # session dashboard
-.venv/bin/python -m algo stop           # halt daemon (broker SLs stay active)
+.venv/bin/python -m vigil status         # session dashboard
+.venv/bin/python -m vigil stop           # halt daemon (broker SLs stay active)
 ```
 
-All 18 subcommands (`algo --help` is the live source of truth; this table is
+All 18 subcommands (`vigil --help` is the live source of truth; this table is
 generated from it, not hand-maintained):
 
 | Command | What it does |
@@ -99,7 +99,7 @@ trail flaw, INDIGO stop-hunt SL) from sl-rules.md.
 
 ## Acceptance path before trusting it with money
 
-1. `algo positions` after a morning login — discovery matches reality.
+1. `vigil positions` after a morning login — discovery matches reality.
 2. One full market session with `--dry-run` — diff the `DRY_RUN_INTENT` events
    against what the Claude loop actually did.
 3. First live session with a single small position.
@@ -109,7 +109,7 @@ trail flaw, INDIGO stop-hunt SL) from sl-rules.md.
 Sector ranking and position sizing (the Claude skill's job, not this daemon's
 — `enter`/`add`/`arm` take an explicit qty from the caller and place it, they
 don't decide it), a launchd/systemd service definition (currently
-`algo start` + your own terminal session or `screen`/`tmux`), true intraday
+`vigil start` + your own terminal session or `screen`/`tmux`), true intraday
 swing-high/low detection for the stop-hunt guard (today's running day-H/L is
 used as one of three PDH/PDL sources — see docs/USAGE.md).
 
@@ -117,4 +117,4 @@ Entry placement, the KiteTicker websocket (armed triggers), and the NSE
 holiday calendar (`data/holidays.txt`, one `YYYY-MM-DD` per line) are all
 implemented — an earlier version of this list called them out as missing
 after they'd already shipped. If you're reading this and something else here
-looks stale, `algo --help` and the test suite are the ground truth.
+looks stale, `vigil --help` and the test suite are the ground truth.

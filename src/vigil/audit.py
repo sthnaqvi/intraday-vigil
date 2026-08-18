@@ -1,7 +1,7 @@
 """Central audit trail: who asked for what, what we sent, what came back.
 
 The event log says *what happened to a position*. It never said *what caused it* — on
-2026-08-18 there was no record that a dashboard click ran `algo start`, no record of the
+2026-08-18 there was no record that a dashboard click ran `vigil start`, no record of the
 Kite reads a cycle made, and no way to tie a button press to the order that resulted.
 
 Everything here is append-only JSONL under `logs/`, and every record carries a **trace id**

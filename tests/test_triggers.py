@@ -9,9 +9,9 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from algo import config, triggers as T
-from algo.broker import Broker
-from algo.events import EventLog
+from vigil import config, triggers as T
+from vigil.broker import Broker
+from vigil.events import EventLog
 from tests.mock_kite import MockKite
 
 IST = ZoneInfo("Asia/Kolkata")

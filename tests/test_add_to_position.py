@@ -8,10 +8,10 @@
 """
 import json
 
-from algo.broker import Broker
-from algo.events import EventLog
-from algo.monitor import MonitorLoop
-from algo.state import SessionState
+from vigil.broker import Broker
+from vigil.events import EventLog
+from vigil.monitor import MonitorLoop
+from vigil.state import SessionState
 from tests.mock_kite import MockKite
 from tests.test_monitor import _now
 
@@ -44,7 +44,7 @@ def test_adding_to_a_position_refreshes_entry_and_sl_pct(tmp_path):
     loop = _loop(tmp_path, kite)
     (tmp_path / "data").mkdir(parents=True, exist_ok=True)
 
-    from algo import config
+    from vigil import config
     config.RISK_FILE.write_text(json.dumps({"HCLTECH": {"sl_pct": 0.01}}))
 
     loop.cycle()

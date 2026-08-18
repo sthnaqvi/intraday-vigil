@@ -3,7 +3,7 @@
 Binds to 127.0.0.1 by design: it exposes live positions AND can place orders, so it must
 never be reachable off the machine.
 
-Every command runs through the real CLI (`python -m algo ...`) as an argv list — never a
+Every command runs through the real CLI (`python -m vigil ...`) as an argv list — never a
 shell string — so all the existing guards apply unchanged: the 1.5% SL cap, the entry gate,
 the kill switch, the 14:30 cutoff. The UI is a front-end for those rules, not a way round
 them.
@@ -154,7 +154,7 @@ def _flag(name: str) -> str:
 def _build_argv(cmd: str, params: dict) -> list[str]:
     """Whitelisted argv. Positional symbol first, everything else as validated flags."""
     spec = COMMANDS[cmd]
-    argv = [sys.executable, "-m", "algo", cmd]
+    argv = [sys.executable, "-m", "vigil", cmd]
 
     for key in spec["args"]:
         val = params.get(key)
@@ -235,7 +235,7 @@ def run_command(cmd: str, params: dict, confirm: str | None) -> dict:
 
 PAGE = r"""<!doctype html>
 <meta charset="utf-8">
-<title>intraday-algo</title>
+<title>vigil</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <style>
 :root{--bg:#0f1115;--panel:#171a21;--side:#13161c;--line:#262b36;--fg:#e6e9ef;--dim:#8b93a7;
@@ -339,7 +339,7 @@ pre.raw{white-space:pre;background:#0a0c10;border:1px solid var(--line);border-r
 
 <div id="jserr"></div>
 <header>
-  <h1>intraday-algo <span class="dim" id="ver"></span></h1>
+  <h1>vigil <span class="dim" id="ver"></span></h1>
   <div id="acct" class="dim">…</div>
   <div id="daemon" class="dim">loading…</div>
 </header>
@@ -481,7 +481,7 @@ pre.raw{white-space:pre;background:#0a0c10;border:1px solid var(--line);border-r
     <div class="pane" id="p_claude">
       <div class="panel"><h2>Skill modes</h2><div class="body">
         <div class="row" id="modes"></div>
-        <span class="hint">these queue for a Claude session — read with <code>algo ask --pending</code></span>
+        <span class="hint">these queue for a Claude session — read with <code>vigil ask --pending</code></span>
       </div></div>
       <div class="panel"><h2>Ask</h2><div class="body">
         <textarea id="q" rows="3" placeholder="e.g. HCLTECH stalled for 2 hours — hold or exit?"></textarea>
@@ -562,7 +562,7 @@ async function run(cmd,params={},confirm=null){
         if(!s.daemon.running){
           $('out').textContent += '\n\n⚠ The daemon exited straight after starting'
             + (s.market_open ? '.' : ' — the market is CLOSED (now '+s.now+').')
-            + '\nUse `algo monitor --force` in a terminal to run outside market hours.';
+            + '\nUse `vigil monitor --force` in a terminal to run outside market hours.';
           $('out').className='down';
         }
       }, 1500);
@@ -618,7 +618,7 @@ function renderAccount(a){
     $('acct').innerHTML=`<span class="pill bad">KITE TOKEN</span> <span class="dim">${a?esc(a.error||'unavailable'):'…'}</span>`;
     $('acct_full').innerHTML=`<span class="down">Cannot read the account: ${a?esc(a.error||''):'…'}</span>
       <div class="hint" style="margin-top:6px">The daemon token dies around 06:00 daily.
-      Re-auth with <code>algo login</code>.</div>`;
+      Re-auth with <code>vigil login</code>.</div>`;
     $('acct_funds').innerHTML='<span class="dim">—</span>';
     return;
   }
@@ -672,7 +672,7 @@ function render(s){
   if(!d.running && !s.market_open)
     al+=`<div class="stale">Daemon is not running, and the market is CLOSED (${s.now}).
          <b>start</b> will launch it and it will exit immediately — that is expected, not a broken button.
-         To run anyway: <code>algo monitor --force</code>.</div>`;
+         To run anyway: <code>vigil monitor --force</code>.</div>`;
   else if(!d.running) al+=`<div class="banner">Daemon is not running — no SL management and no auto square-off.</div>`;
   else if(!d.fresh) al+=`<div class="stale">Snapshot is ${d.age_s}s old — treat these numbers as stale.</div>`;
   const naked=s.positions.filter(p=>p.protected===false);
@@ -963,7 +963,7 @@ def serve(port: int = 8765) -> None:
     print(f"Dashboard: http://{_BIND_HOST}:{port}   (Ctrl-C to stop)")
     print("Order-placing commands require a typed confirmation, checked server-side.")
     if not claudelink.resolve_cli():
-        print("No `claude` CLI found — questions queue; read them with `algo ask --pending`.")
+        print("No `claude` CLI found — questions queue; read them with `vigil ask --pending`.")
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

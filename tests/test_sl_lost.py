@@ -10,11 +10,11 @@ silently re-placing it would have overridden a decision the user had just made.
 """
 import json
 
-from algo import config
-from algo.broker import Broker
-from algo.events import EventLog
-from algo.monitor import MonitorLoop
-from algo.state import SessionState
+from vigil import config
+from vigil.broker import Broker
+from vigil.events import EventLog
+from vigil.monitor import MonitorLoop
+from vigil.state import SessionState
 from tests.mock_kite import MockKite
 from tests.test_monitor import _now
 

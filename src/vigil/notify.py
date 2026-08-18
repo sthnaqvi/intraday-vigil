@@ -119,13 +119,13 @@ def backend_name() -> str:
     return _backend.name if _backend else "none — terminal fallback only"
 
 
-def notify(message: str, title: str = "intraday-algo", sound: bool = False) -> None:
+def notify(message: str, title: str = "vigil", sound: bool = False) -> None:
     delivered = _backend.notify(message, title, sound) if _backend else False
     if not delivered:
         _terminal.notify(message, title, sound)
 
 
-def alert_dialog(message: str, title: str = "intraday-algo") -> None:
+def alert_dialog(message: str, title: str = "vigil") -> None:
     """Modal alert for events that must not be missed (token expiry, unprotected position)."""
     delivered = _backend.alert(message, title) if _backend else False
     if not delivered:

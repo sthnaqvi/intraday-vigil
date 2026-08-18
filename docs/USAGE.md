@@ -1,10 +1,10 @@
-# intraday-algo — Complete Usage Guide
+# vigil — Complete Usage Guide
 
 From zero to a fully-automated trading day. The system has two halves:
 
 | Half | What it does | Where |
 |---|---|---|
-| **Python daemon** (this repo) | Everything mechanical after entry: SL phases, breakeven, trailing, qty verification, time alerts, 15:05 square-off, kill switch | `~/Others/intraday-algo` |
+| **Python daemon** (this repo) | Everything mechanical after entry: SL phases, breakeven, trailing, qty verification, time alerts, 15:05 square-off, kill switch | `~/Others/vigil` |
 | **Claude skill** (`/intraday-trader`) | Everything needing judgment: morning bias, macro theme, sector ranking, entries, post-session RCA | `~/.claude/skills/intraday-trader` |
 
 They talk through three small files in `data/` (see [The contract](#the-contract-how-the-skill-and-daemon-connect)).
@@ -16,7 +16,7 @@ They talk through three small files in `data/` (see [The contract](#the-contract
 Already done on this machine, listed for reinstalls:
 
 ```bash
-cd ~/Others/intraday-algo
+cd ~/Others/vigil
 /opt/homebrew/bin/python3.13 -m venv .venv
 .venv/bin/pip install -r requirements.txt
 ```
@@ -24,7 +24,7 @@ cd ~/Others/intraday-algo
 1. `.env` in the project root with `KITE_API_KEY` and `KITE_API_SECRET` (`chmod 600 .env`).
 2. At https://developers.kite.trade set your app's **redirect URL** to
    `http://localhost:3100/kite-token-exchange`.
-3. Optional: `alias algo='~/Others/intraday-algo/.venv/bin/python -m algo'` in `~/.zshrc` —
+3. Optional: `alias vigil='~/Others/vigil/.venv/bin/python -m vigil'` in `~/.zshrc` —
    the rest of this doc assumes it.
 
 ---
@@ -32,7 +32,7 @@ cd ~/Others/intraday-algo
 ## 2. The basic day (one command)
 
 ```bash
-algo start
+vigil start
 ```
 
 That's it. `start` chains everything:
@@ -55,7 +55,7 @@ refuses to start with neither available unless you pass `--allow-silent`.)
 Check in any time:
 
 ```bash
-algo status
+vigil status
 ```
 
 ```
@@ -65,10 +65,10 @@ INDIGO      LONG    100   4150.00   4210.00  +1.45   +6000.00   2   4150.00
 Day realised: Rs +0.00 (+0.00R)
 ```
 
-Stop early if you ever need to (`algo stop`) — resting SL orders stay live at the
+Stop early if you ever need to (`vigil stop`) — resting SL orders stay live at the
 exchange, so stopping the daemon never leaves you unprotected.
 
-First few sessions: run `algo start --dry-run` — identical behaviour, but every
+First few sessions: run `vigil start --dry-run` — identical behaviour, but every
 SL modification is only *logged* (`DRY_RUN_INTENT` events), nothing touches real
 orders. Diff the log against what you'd have done manually before going live.
 
@@ -76,30 +76,30 @@ orders. Diff the log against what you'd have done manually before going live.
 
 ## 3. Command reference
 
-`algo --help` and `algo <command> --help` are the live source of truth — this
+`vigil --help` and `vigil <command> --help` are the live source of truth — this
 table is a copy of it, not hand-maintained, so if the two ever disagree the
 `--help` output wins.
 
 | Command | What it does |
 |---|---|
-| `algo start [--dry-run] [--force] [--paste] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
-| `algo stop` | Stop the daemon (broker SLs remain active) |
-| `algo login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work |
-| `algo positions` | Raw broker view: open MIS positions + the SL order guarding each |
-| `algo status [--json]` | Session dashboard; `--json` prints the raw snapshot |
-| `algo add-position SYM --sl-pct 1.0 [--pdh X --pdl Y]` | Seed risk info for a symbol (writes `data/risk.json`) |
-| `algo monitor [--dry-run] [--force] [--allow-silent]` | The loop in the foreground (what `start` runs for you) |
-| `algo squareoff [--yes]` | Emergency: cancel all SLs + market-exit everything now |
-| `algo enter SYM --side long\|short --qty N --sl-pct X [--pdh X --pdl Y]` | Open a MIS position + SL now — no MCP session needed |
-| `algo arm SYM --side ... --above/--below PRICE --qty N --sl-pct X [--auto]` | Arm a price trigger watched over the tick WebSocket |
-| `algo add SYM --qty N` | Scale into an open position (rewrites the risk seed) |
-| `algo exit SYM` | Exit ONE symbol: cancel its SL, then market-exit |
-| `algo protect SYM` | Re-place a missing SL on an open position |
-| `algo web [--port 8765]` | Local dashboard — **can place orders** behind typed confirmation; binds to `127.0.0.1` only, always |
-| `algo ask [question] [--pending] [--answer ID --text ...]` | Ask Claude (runs the CLI if present, else queues) |
-| `algo quote SYM [SYM...]` | LTP + OHLC without the MCP session |
-| `algo triggers` | List armed / fired triggers |
-| `algo disarm [SYM]` | Cancel armed triggers (all, or one symbol) |
+| `vigil start [--dry-run] [--force] [--paste] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
+| `vigil stop` | Stop the daemon (broker SLs remain active) |
+| `vigil login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work |
+| `vigil positions` | Raw broker view: open MIS positions + the SL order guarding each |
+| `vigil status [--json]` | Session dashboard; `--json` prints the raw snapshot |
+| `vigil add-position SYM --sl-pct 1.0 [--pdh X --pdl Y]` | Seed risk info for a symbol (writes `data/risk.json`) |
+| `vigil monitor [--dry-run] [--force] [--allow-silent]` | The loop in the foreground (what `start` runs for you) |
+| `vigil squareoff [--yes]` | Emergency: cancel all SLs + market-exit everything now |
+| `vigil enter SYM --side long\|short --qty N --sl-pct X [--pdh X --pdl Y]` | Open a MIS position + SL now — no MCP session needed |
+| `vigil arm SYM --side ... --above/--below PRICE --qty N --sl-pct X [--auto]` | Arm a price trigger watched over the tick WebSocket |
+| `vigil add SYM --qty N` | Scale into an open position (rewrites the risk seed) |
+| `vigil exit SYM` | Exit ONE symbol: cancel its SL, then market-exit |
+| `vigil protect SYM` | Re-place a missing SL on an open position |
+| `vigil web [--port 8765]` | Local dashboard — **can place orders** behind typed confirmation; binds to `127.0.0.1` only, always |
+| `vigil ask [question] [--pending] [--answer ID --text ...]` | Ask Claude (runs the CLI if present, else queues) |
+| `vigil quote SYM [SYM...]` | LTP + OHLC without the MCP session |
+| `vigil triggers` | List armed / fired triggers |
+| `vigil disarm [SYM]` | Cancel armed triggers (all, or one symbol) |
 
 `--allow-silent` on `start`/`monitor` lets a live daemon run without a
 detected desktop notifier (macOS osascript / Linux notify-send). Without it,
@@ -133,18 +133,18 @@ Source of truth: `~/.claude/skills/intraday-trader/references/sl-rules.md`.
 
 | File | Writer | Reader | Content |
 |---|---|---|---|
-| `data/risk.json` | skill (or `algo add-position`) | daemon | `{"INDIGO": {"sl_pct": 0.01, "pdh": 4205, "pdl": 4080}}` |
+| `data/risk.json` | skill (or `vigil add-position`) | daemon | `{"INDIGO": {"sl_pct": 0.01, "pdh": 4205, "pdl": 4080}}` |
 | `data/status.json` | daemon, every cycle | skill / you | Full session snapshot (positions, phases, P&L, flags) |
 | `data/events-<date>.jsonl` | daemon | skill's RCA mode | Append-only audit log of every decision |
 
 Flow: skill places entries + initial SLs via MCP → writes `risk.json` seeds →
 daemon discovers positions and takes over → skill's MONITOR mode just renders
-`status.json` (stale snapshot = daemon not running → it tells you to `algo start`)
+`status.json` (stale snapshot = daemon not running → it tells you to `vigil start`)
 → skill's RCA mode replays the events file after 15:30.
 
 Without a seed the daemon still works: it derives sl_pct from the untouched SL
 order (logged as a warning). A position with **no SL at all** and no seed triggers
-a modal alert — seed it with `algo add-position` and the daemon places the SL-M
+a modal alert — seed it with `vigil add-position` and the daemon places the SL-M
 itself on the next cycle.
 
 ## 6. Advanced
@@ -156,8 +156,8 @@ recognized from `trigger == entry` if the session file is lost.
 
 **Token expiry mid-session.** The daemon never crashes on it: you get a modal
 alert, it retries every 60 s, and the resting SLs keep protecting you. Run
-`algo login` in another terminal; the daemon picks the new token up on its own
-process restart — or just `algo stop && algo start`.
+`vigil login` in another terminal; the daemon picks the new token up on its own
+process restart — or just `vigil stop && vigil start`.
 
 **Event log anatomy.** Each line of `events-<date>.jsonl`:
 `{"ts", "type", "symbol", "data"}`. Key types: `POSITION_DISCOVERED`,
@@ -183,10 +183,10 @@ grep SL_MODIFY data/events-$(date +%F).jsonl | python3 -m json.tool --json-lines
 
 | Symptom | Fix |
 |---|---|
-| `auth: No valid token for today` | `algo login` (tokens die ~6 AM daily) |
-| Login browser tab errors after credentials | Redirect URL at developers.kite.trade must be exactly `http://localhost:3100/kite-token-exchange`; or use `algo login --paste` |
+| `auth: No valid token for today` | `vigil login` (tokens die ~6 AM daily) |
+| Login browser tab errors after credentials | Redirect URL at developers.kite.trade must be exactly `http://localhost:3100/kite-token-exchange`; or use `vigil login --paste` |
 | Login timeout (15 min) | Rerun; check nothing else owns port 3100 (`lsof -iTCP:3100`) |
-| `algo status` says STALE | Daemon died or was never started — `algo start` (check `logs/daemon.out`) |
+| `vigil status` says STALE | Daemon died or was never started — `vigil start` (check `logs/daemon.out`) |
 | "SL qty mismatch fixed" notifications | Working as intended — that's the Kite qty=1 default being caught |
 | `historical_data unavailable` warning | Personal API keys lack the paid historical add-on; seed pdh/pdl via `add-position` or let the skill write them |
 | Daemon refuses to run | Market closed — `--force` to override (e.g. testing on a weekend) |
