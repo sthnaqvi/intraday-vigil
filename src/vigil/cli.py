@@ -13,7 +13,7 @@ import traceback
 from . import audit, auth
 from .commands.armed import cmd_arm, cmd_disarm, cmd_triggers
 from .commands.daemon import cmd_login, cmd_monitor, cmd_start, cmd_stop
-from .commands.info import cmd_positions, cmd_quote, cmd_status
+from .commands.info import cmd_paths, cmd_positions, cmd_quote, cmd_status
 from .commands.integrations import cmd_ask, cmd_web
 from .commands.orders import (
     cmd_add, cmd_add_position, cmd_enter, cmd_exit, cmd_protect, cmd_squareoff,
@@ -135,6 +135,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--yes", action="store_true")
     sp.add_argument("--dry-run", action="store_true")
     sp.set_defaults(fn=cmd_protect)
+
+    sp = sub.add_parser("paths", help="where this install keeps its state (VIGIL_HOME/XDG)")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(fn=cmd_paths)
 
     sp = sub.add_parser("quote", help="LTP + OHLC without the MCP session")
     sp.add_argument("symbols", nargs="+")

@@ -94,6 +94,26 @@ def cmd_status(args) -> int:
     return 0
 
 
+def cmd_paths(args) -> int:
+    """Where this install keeps its state — the skill and any tooling should resolve
+    paths through this instead of hardcoding a filesystem location, since VIGIL_HOME/
+    XDG_STATE_HOME make that location a per-install choice, not a constant."""
+    paths = {
+        "state_dir": str(config.STATE_DIR),
+        "data_dir": str(config.DATA_DIR),
+        "logs_dir": str(config.LOGS_DIR),
+        "status_file": str(config.STATUS_FILE),
+        "risk_file": str(config.RISK_FILE),
+        "events_glob": str(config.DATA_DIR / "events-*.jsonl"),
+    }
+    if getattr(args, "json", False):
+        print(json.dumps(paths, indent=2))
+    else:
+        for k, v in paths.items():
+            print(f"{k:<12} {v}")
+    return 0
+
+
 def cmd_quote(args) -> int:
     """LTP + OHLC on the daemon's token, so quotes never need the MCP session."""
     broker, _ = _live_broker()
