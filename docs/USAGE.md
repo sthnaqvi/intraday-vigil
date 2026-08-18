@@ -4,7 +4,7 @@ From zero to a fully-automated trading day. The system has two halves:
 
 | Half | What it does | Where |
 |---|---|---|
-| **Python daemon** (this repo) | Everything mechanical after entry: SL phases, breakeven, trailing, qty verification, time alerts, 15:10 square-off, kill switch | `~/Others/intraday-algo` |
+| **Python daemon** (this repo) | Everything mechanical after entry: SL phases, breakeven, trailing, qty verification, time alerts, 15:05 square-off, kill switch | `~/Others/intraday-algo` |
 | **Claude skill** (`/intraday-trader`) | Everything needing judgment: morning bias, macro theme, sector ranking, entries, post-session RCA | `~/.claude/skills/intraday-trader` |
 
 They talk through three small files in `data/` (see [The contract](#the-contract-how-the-skill-and-daemon-connect)).
@@ -43,12 +43,14 @@ That's it. `start` chains everything:
 2. **Daemon launch** — the monitor loop starts in the background (survives closing
    the terminal). Started before 9:15? It waits for the bell on its own.
 3. From then on it runs the whole session hands-off and **exits by itself after the
-   15:10 square-off**.
+   15:05 square-off** (deliberately ahead of Zerodha's own 15:10 MIS force-square).
 
 Place your trades however you like — through the Claude skill or manually in the
 Kite app. The daemon auto-discovers any MIS position within one cycle (≤150 s) and
-starts managing its SL. You'll get a macOS notification for every event that
-matters: position discovered, phase change, SL moved, SL hit, time alerts.
+starts managing its SL. You'll get a desktop notification for every event that
+matters: position discovered, phase change, SL moved, SL hit, time alerts. (macOS
+via osascript, Linux via notify-send, or a terminal fallback — a live daemon
+refuses to start with neither available unless you pass `--allow-silent`.)
 
 Check in any time:
 
@@ -74,16 +76,35 @@ orders. Diff the log against what you'd have done manually before going live.
 
 ## 3. Command reference
 
+`algo --help` and `algo <command> --help` are the live source of truth — this
+table is a copy of it, not hand-maintained, so if the two ever disagree the
+`--help` output wins.
+
 | Command | What it does |
 |---|---|
-| `algo start [--dry-run]` | Morning one-shot: login if needed + background daemon |
+| `algo start [--dry-run] [--force] [--paste] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
 | `algo stop` | Stop the daemon (broker SLs remain active) |
-| `algo status [--json]` | Session dashboard; `--json` prints the raw snapshot |
 | `algo login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work |
 | `algo positions` | Raw broker view: open MIS positions + the SL order guarding each |
+| `algo status [--json]` | Session dashboard; `--json` prints the raw snapshot |
 | `algo add-position SYM --sl-pct 1.0 [--pdh X --pdl Y]` | Seed risk info for a symbol (writes `data/risk.json`) |
-| `algo monitor [--dry-run] [--force]` | The loop in the foreground (what `start` runs for you) |
+| `algo monitor [--dry-run] [--force] [--allow-silent]` | The loop in the foreground (what `start` runs for you) |
 | `algo squareoff [--yes]` | Emergency: cancel all SLs + market-exit everything now |
+| `algo enter SYM --side long\|short --qty N --sl-pct X [--pdh X --pdl Y]` | Open a MIS position + SL now — no MCP session needed |
+| `algo arm SYM --side ... --above/--below PRICE --qty N --sl-pct X [--auto]` | Arm a price trigger watched over the tick WebSocket |
+| `algo add SYM --qty N` | Scale into an open position (rewrites the risk seed) |
+| `algo exit SYM` | Exit ONE symbol: cancel its SL, then market-exit |
+| `algo protect SYM` | Re-place a missing SL on an open position |
+| `algo web [--port 8765]` | Local dashboard — **can place orders** behind typed confirmation; binds to `127.0.0.1` only, always |
+| `algo ask [question] [--pending] [--answer ID --text ...]` | Ask Claude (runs the CLI if present, else queues) |
+| `algo quote SYM [SYM...]` | LTP + OHLC without the MCP session |
+| `algo triggers` | List armed / fired triggers |
+| `algo disarm [SYM]` | Cancel armed triggers (all, or one symbol) |
+
+`--allow-silent` on `start`/`monitor` lets a live daemon run without a
+detected desktop notifier (macOS osascript / Linux notify-send). Without it,
+a live daemon with no working notifier refuses to start — you'd otherwise get
+zero alerts for SL hits, unprotected positions, or token expiry.
 
 ---
 
@@ -100,7 +121,9 @@ Source of truth: `~/.claude/skills/intraday-trader/references/sl-rules.md`.
 - **Stop-hunt guard** on every SL placement: never within 0.3% of PDH, PDL, or
   today's high/low — pushed 0.3% beyond, in your favour.
 - **Timeline (IST)**: alerts at 14:00 / 14:30 / 14:45 · `no_new_entries` flag from
-  14:30 · full square-off at 15:10 (ahead of Zerodha's 15:15 force square-off).
+  14:30 · full square-off at 15:05 (ahead of Zerodha's 15:10 force square-off —
+  the daemon must finish before the broker does, or it takes the broker's
+  market fill instead of a controlled exit).
 - **Kill switch**: day's realised R ≤ −2.0 → `kill_switch: true` in status.json.
   The daemon manages existing positions but the skill must refuse new entries.
 - **Exit detection** is by SL order status `COMPLETE` — a profitable trail exit is
