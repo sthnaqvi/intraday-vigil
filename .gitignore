@@ -1,0 +1,28 @@
+# secrets
+.env
+.env.*
+!.env.example
+data/token.json
+
+# runtime state (per-user, regenerated on each session)
+data/
+logs/
+
+# private track: verbatim incident write-ups with dates/₹ amounts — never published
+private/
+
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+dist/
+build/
+.coverage
+htmlcov/
+.mypy_cache/
+.ruff_cache/
+
+# os
+.DS_Store

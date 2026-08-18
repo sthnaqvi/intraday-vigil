@@ -1,0 +1,72 @@
+"""All rule constants in one place. Spec: ~/.claude/skills/intraday-trader/references/sl-rules.md"""
+from datetime import time
+from pathlib import Path
+
+PROJECT_ROOT = Path(__file__).resolve().parent.parent
+DATA_DIR = PROJECT_ROOT / "data"
+LOGS_DIR = PROJECT_ROOT / "logs"
+ENV_FILE = PROJECT_ROOT / ".env"
+TOKEN_FILE = DATA_DIR / "token.json"
+RISK_FILE = DATA_DIR / "risk.json"
+STATUS_FILE = DATA_DIR / "status.json"
+PID_FILE = DATA_DIR / "daemon.pid"
+HOLIDAYS_FILE = DATA_DIR / "holidays.txt"
+
+# SL lifecycle
+PHASE2_R = 1.0            # breakeven threshold (profit in R)
+PHASE3_R = 1.5            # trail threshold
+TRAIL_MULT = 2.0          # trail_pct = TRAIL_MULT * sl_pct  (never a fixed 5%)
+TRAIL_MIN_MOVE = 0.005    # only modify if SL moves > 0.5%
+STOP_HUNT_BUFFER = 0.003  # keep SL 0.3% clear of PDH/PDL/day-H/L
+NSE_TICK = 0.05
+
+# Cadence
+CYCLE_NORMAL_S = 150
+CYCLE_NEAR_SL_S = 90
+NEAR_SL_PCT = 0.005       # position "near SL" when LTP within 0.5% of trigger
+
+# Risk
+KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries
+
+# When a tracked position's SL disappears (cancelled in the Kite app, pulled by the broker),
+# should the daemon re-place it automatically? Default False: on 2026-08-18 the user
+# cancelled a stop deliberately, and silently re-placing it would have overridden a decision
+# they had just made. Detection and a loud, repeating alert are unconditional either way;
+# `algo protect SYMBOL` re-places on demand.
+AUTO_REPROTECT = False
+
+# Session times (IST)
+MARKET_OPEN = time(9, 15)
+MARKET_CLOSE = time(15, 30)
+NO_NEW_ENTRIES_AFTER = time(14, 30)
+
+# Zerodha force-squares MIS at 15:10 (auction/closing rule). The daemon MUST finish before
+# that or the broker wins the race: we take its market fill instead of a controlled exit,
+# and SQUAREOFF_FILL bookkeeping races a position that is already flat. Corrected
+# 2026-08-18 — both were previously 15:10, giving the daemon zero head start.
+BROKER_SQUAREOFF_AT = time(15, 10)
+SQUAREOFF_AT = time(15, 5)
+TIME_ALERTS = {
+    "alert_1400": (time(14, 0), "1h 5m to auto-squareoff (15:05). Review open positions."),
+    "alert_1430": (time(14, 30), "35 min left. No new entries from now. Consider exiting losers."),
+    "alert_1445": (time(14, 45), "Exit manually now or hold till the 15:05 auto square-off "
+                                 "(Zerodha force-squares at 15:10)."),
+}
+
+# API behaviour
+# Zerodha rejects API market orders (MARKET, and SL-M modifies) without market
+# protection. Percentage cap on fill price away from the trigger. Keep this SMALL:
+# 5 was rejected by the exchange with '16448: Difference between limit price and
+# trigger price is beyond permissible range' (2026-08-18). 1 is accepted.
+# Note: market protection converts an SL-M into an SL (limit) at trigger*(1+pct),
+# so a gap beyond that band can leave the stop unfilled.
+MARKET_PROTECTION_PCT = 1
+API_MIN_SPACING_S = 0.35
+RETRY_BACKOFF_S = [2, 4, 8]
+MAX_FAILED_CYCLES_BEFORE_ALERT = 3
+
+# Auth — must match the redirect URL registered at developers.kite.trade:
+# http://localhost:3100/kite-token-exchange
+LOGIN_LISTEN_PORT = 3100
+LOGIN_REDIRECT_PATH = "/kite-token-exchange"
+TOKEN_VALID_FROM_HOUR_IST = 6   # tokens generated before 06:00 IST today are stale

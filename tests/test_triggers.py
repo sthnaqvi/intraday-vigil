@@ -1,0 +1,206 @@
+"""Armed-trigger tests: crossing logic, the entry gate, and the execute path.
+
+The WebSocket transport itself is proven separately against the live feed; these cover the
+decision logic that fires an order, which is where money is at risk.
+"""
+import json
+from datetime import datetime
+from zoneinfo import ZoneInfo
+
+import pytest
+
+from algo import config, triggers as T
+from algo.broker import Broker
+from algo.events import EventLog
+from tests.mock_kite import MockKite
+
+IST = ZoneInfo("Asia/Kolkata")
+
+
+class FakeSession:
+    def __init__(self, kill_switch=False, realized_r_today=0.0):
+        self.kill_switch = kill_switch
+        self.realized_r_today = realized_r_today
+
+
+@pytest.fixture(autouse=True)
+def _isolate(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "TRIGGERS_FILE", tmp_path / "triggers.json")
+    monkeypatch.setattr(T, "notify", lambda *a, **k: None)
+    monkeypatch.setattr(T, "alert_dialog", lambda *a, **k: None)
+    yield
+
+
+def _bits(tmp_path):
+    kite = MockKite()
+    events = EventLog(tmp_path / "data")
+    return kite, Broker(kite, events), events
+
+
+def _events(tmp_path, type_):
+    p = next((tmp_path / "data").glob("events-*.jsonl"), None)
+    if p is None:
+        return []
+    return [json.loads(l) for l in p.read_text().splitlines()
+            if json.loads(l)["type"] == type_]
+
+
+# ---------- crossing ----------
+
+def test_crossed_above_and_below():
+    up = T.Trigger("RELIANCE", "LONG", 1328.60, "above", 10, 0.01)
+    assert not up.crossed(1328.60), "touching the level is not a break"
+    assert up.crossed(1328.65)
+    assert not up.crossed(1300.0)
+
+    down = T.Trigger("HCLTECH", "SHORT", 1296.0, "below", 10, 0.01)
+    assert not down.crossed(1296.0)
+    assert down.crossed(1295.95)
+    assert not down.crossed(1300.0)
+
+
+def test_persistence_round_trip(tmp_path):
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 590, 0.0091, auto=True,
+                      pdh=1320.8, pdl=1298.1, note="x")])
+    back = T.load()
+    assert len(back) == 1 and back[0].symbol == "RELIANCE"
+    assert back[0].auto is True and back[0].qty == 590
+    assert T.armed(back) == back
+
+
+def test_unknown_fields_in_file_do_not_crash_load(tmp_path):
+    (tmp_path / "triggers.json").write_text(json.dumps([{
+        "symbol": "X", "direction": "LONG", "level": 1.0, "side": "above",
+        "qty": 1, "sl_pct": 0.01, "some_future_field": "ignored",
+    }]))
+    assert T.load()[0].symbol == "X"
+
+
+def test_corrupt_file_returns_empty_not_exception(tmp_path):
+    (tmp_path / "triggers.json").write_text("{not json")
+    assert T.load() == []
+
+
+# ---------- entry gate ----------
+
+def test_gate_blocks_after_1430(monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 14, 31, tzinfo=IST))
+    assert "cutoff" in T.gate_block_reason(FakeSession())
+
+
+def test_gate_blocks_on_kill_switch(monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    assert "kill switch" in T.gate_block_reason(FakeSession(kill_switch=True, realized_r_today=-2.1))
+
+
+def test_gate_allows_in_window(monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    assert T.gate_block_reason(FakeSession()) is None
+
+
+def test_execute_refuses_when_gate_blocks(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 14, 45, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)
+
+    assert T.execute(t, broker, events, FakeSession(), 1329.0) is False
+    assert kite.place_calls == [], "no order may be placed once the gate is shut"
+    assert t.status == T.CANCELLED
+    assert _events(tmp_path, "TRIGGER_BLOCKED")
+
+
+# ---------- execution ----------
+
+def test_execute_places_entry_then_guarded_sl_and_writes_seed(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.008,
+                  auto=True, pdh=1320.8, pdl=1298.1)
+
+    assert T.execute(t, broker, events, FakeSession(), 1329.0) is True
+
+    kinds = [c["order_type"] for c in kite.place_calls]
+    assert kinds == ["MARKET", "SL-M"], "entry must precede the stop"
+    assert kite.place_calls[0]["transaction_type"] == "BUY"
+    assert kite.place_calls[1]["transaction_type"] == "SELL"
+    assert kite.place_calls[1]["quantity"] == 100, "SL must cover the whole position"
+
+    # raw SL 1329*0.992 = 1318.37 sits 0.18% under PDH 1320.80 -> guard pushes it below
+    sl = kite.place_calls[1]["trigger_price"]
+    assert sl < 1320.8 * (1 - 0.0029), f"stop-hunt guard not applied, sl={sl}"
+
+    seeds = json.loads(config.RISK_FILE.read_text())
+    assert "RELIANCE" in seeds and seeds["RELIANCE"]["pdh"] == 1320.8
+    assert 0.005 < seeds["RELIANCE"]["sl_pct"] < 0.015
+
+    assert t.status == T.FIRED and t.entry_order_id and t.sl_order_id
+    assert _events(tmp_path, "TRIGGER_FIRED")
+
+
+def test_execute_derives_sl_from_actual_fill_not_the_trigger_level(tmp_path, monkeypatch):
+    """A gap through the level must not anchor the stop to a price we never got."""
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1350.0)          # filled well above the 1328.60 trigger
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)
+
+    assert T.execute(t, broker, events, FakeSession(), 1350.0) is True
+    sl = kite.place_calls[1]["trigger_price"]
+    assert sl > 1328.6, "SL was anchored to the trigger level, not the fill"
+    assert 1330 < sl < 1340
+
+
+def test_sl_failure_leaves_a_seed_so_the_daemon_can_recover(tmp_path, monkeypatch):
+    """Entry filled but the SL leg failed: the position is open and unprotected."""
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+
+    real_place_sl = Broker.place_sl
+    monkeypatch.setattr(Broker, "place_sl",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("rejected")))
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)
+
+    assert T.execute(t, broker, events, FakeSession(), 1329.0) is False
+    assert t.status == T.FAILED and "WITHOUT SL" in t.detail
+    assert _events(tmp_path, "TRIGGER_SL_FAILED")
+    seeds = json.loads(config.RISK_FILE.read_text())
+    assert "RELIANCE" in seeds, "seed must exist so the monitor can place the missing SL"
+    monkeypatch.setattr(Broker, "place_sl", real_place_sl)
+
+
+def test_entry_failure_places_no_stop_and_reports(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    monkeypatch.setattr(Broker, "place_entry",
+                        lambda *a, **k: (_ for _ in ()).throw(RuntimeError("margin")))
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)
+
+    assert T.execute(t, broker, events, FakeSession(), 1329.0) is False
+    assert t.status == T.FAILED
+    assert kite.place_calls == [], "a failed entry must not leave a naked stop"
+    assert _events(tmp_path, "TRIGGER_ENTRY_FAILED")
+
+
+def test_short_trigger_places_buy_stop_above(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("HCLTECH", 1295.0)
+    t = T.Trigger("HCLTECH", "SHORT", 1296.0, "below", 200, 0.01, auto=True)
+
+    assert T.execute(t, broker, events, FakeSession(), 1295.0) is True
+    assert kite.place_calls[0]["transaction_type"] == "SELL"
+    assert kite.place_calls[1]["transaction_type"] == "BUY"
+    assert kite.place_calls[1]["trigger_price"] > 1295.0, "short stop must sit above entry"
