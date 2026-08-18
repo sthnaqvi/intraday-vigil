@@ -240,7 +240,7 @@ def test_refused_command_is_still_auditable(tmp_path, monkeypatch, _never_really
 
 
 def test_trace_propagates_to_the_child_process(_never_really_run, monkeypatch):
-    """The subprocess must inherit ALGO_TRACE_ID or the trail breaks at the boundary."""
+    """The subprocess must inherit VIGIL_TRACE_ID or the trail breaks at the boundary."""
     from vigil import audit
     seen = {}
 

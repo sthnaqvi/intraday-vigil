@@ -242,7 +242,9 @@ def run_command(cmd: str, params: dict, confirm: str | None) -> dict:
                  confirmed=bool(need), argv=argv[1:])
     started = time.monotonic()
     try:
-        proc = subprocess.run(argv, cwd=config.PROJECT_ROOT, capture_output=True,
+        # No cwd pin: `-m vigil` resolves from any working directory now that the
+        # package is installed — see the matching comment in cli.py's cmd_start.
+        proc = subprocess.run(argv, capture_output=True,
                               text=True, timeout=120,
                               env=audit.child_env(trace, "web"))
     except subprocess.TimeoutExpired:

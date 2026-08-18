@@ -3,13 +3,16 @@ import os
 from datetime import time
 from pathlib import Path
 
-# PROJECT_ROOT is the source checkout directory. It is used ONLY to give a subprocess a
-# working directory when spawning `python -m vigil ...` (cli.py, webui.py) — it must never
-# be the base for anything this process WRITES. A pip-installed package's __file__ lives
+# PROJECT_ROOT is the source checkout directory (three levels up from this file: config.py
+# -> vigil/ -> src/ -> repo root). Kept for introspection/debugging only — it must never be
+# the base for anything this process WRITES. A pip-installed package's __file__ lives
 # inside site-packages; deriving state paths from it would write a live broker access
-# token, the daily P&L log, and armed order triggers into the install directory. That
-# used to be exactly what DATA_DIR/LOGS_DIR/ENV_FILE/TOKEN_FILE did below, which is why
-# this file was unpippable before this change.
+# token, the daily P&L log, and armed order triggers into the install directory. That used
+# to be exactly what DATA_DIR/LOGS_DIR/ENV_FILE/TOKEN_FILE did below, which is why this
+# file was unpippable before that was fixed. It was ALSO used as a subprocess cwd when
+# spawning `python -m vigil ...` (cli.py, webui.py) until the package became pip-
+# installable (editable or otherwise): `-m vigil` now resolves correctly from any cwd, so
+# neither call site pins one anymore.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent.parent
 
 

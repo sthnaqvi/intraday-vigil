@@ -53,8 +53,8 @@ def test_all_state_paths_live_under_state_dir(fresh_config):
 
 
 def test_project_root_is_never_the_base_for_state(fresh_config):
-    """PROJECT_ROOT may still exist (it's used as a subprocess cwd elsewhere), but nothing
-    that writes state may be derived from it — that was the entire bug."""
+    """PROJECT_ROOT may still exist (kept for introspection), but nothing that writes
+    state may be derived from it — that was the entire bug."""
     cfg = fresh_config
     for path in (cfg.DATA_DIR, cfg.LOGS_DIR, cfg.ENV_FILE, cfg.TOKEN_FILE):
         assert cfg.PROJECT_ROOT not in path.parents

@@ -12,7 +12,7 @@ so one action can be followed end to end:
     web.jsonl       every HTTP request the dashboard served
     events-*.jsonl  domain events (already existed), now stamped with the same trace
 
-A trace propagates into subprocesses through ALGO_TRACE_ID, so a click in the browser and
+A trace propagates into subprocesses through VIGIL_TRACE_ID, so a click in the browser and
 the order it places share one id.
 """
 from __future__ import annotations
@@ -26,8 +26,8 @@ from typing import Any
 
 from . import clock, config
 
-TRACE_ENV = "ALGO_TRACE_ID"
-SOURCE_ENV = "ALGO_TRACE_SOURCE"
+TRACE_ENV = "VIGIL_TRACE_ID"
+SOURCE_ENV = "VIGIL_TRACE_SOURCE"
 
 _local = threading.local()
 _write_lock = threading.Lock()
