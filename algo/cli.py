@@ -438,7 +438,7 @@ def cmd_exit(args) -> int:
 
 def cmd_web(args) -> int:
     from . import webui
-    webui.serve(host=args.host, port=args.port)
+    webui.serve(port=args.port)
     return 0
 
 
@@ -662,8 +662,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--dry-run", action="store_true")
     sp.set_defaults(fn=cmd_exit)
 
-    sp = sub.add_parser("web", help="local dashboard (read-only; cannot place orders)")
-    sp.add_argument("--host", default="127.0.0.1")
+    sp = sub.add_parser("web", help="local dashboard — CAN place orders behind typed "
+                                     "confirmation; binds to localhost only, always")
     sp.add_argument("--port", type=int, default=8765)
     sp.set_defaults(fn=cmd_web)
 

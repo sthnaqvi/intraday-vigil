@@ -946,13 +946,21 @@ class Handler(BaseHTTPRequestHandler):
         self._send(404, b"not found", "text/plain")
 
 
-def serve(host: str = "127.0.0.1", port: int = 8765) -> None:
+#: Always loopback. This dashboard can place, modify and cancel real orders (behind
+#: typed confirmation — see run_command), so it must never be reachable from the network.
+#: There used to be a --host flag here; it was removed rather than guarded, because a
+#: flag that CAN expose an order-placing surface to the LAN is a footgun with a label on
+#: it, not a safety feature. Use an SSH tunnel if you genuinely need remote access.
+_BIND_HOST = "127.0.0.1"
+
+
+def serve(port: int = 8765) -> None:
     # Mark this whole process as the dashboard, so its own audit records are labelled
     # "web" too — not just the subprocesses it spawns.
     os.environ[audit.SOURCE_ENV] = "web"
-    audit.action("web.serve", host=host, port=port, ui_version=UI_VERSION)
-    srv = HTTPServer((host, port), Handler)
-    print(f"Dashboard: http://{host}:{port}   (Ctrl-C to stop)")
+    audit.action("web.serve", host=_BIND_HOST, port=port, ui_version=UI_VERSION)
+    srv = HTTPServer((_BIND_HOST, port), Handler)
+    print(f"Dashboard: http://{_BIND_HOST}:{port}   (Ctrl-C to stop)")
     print("Order-placing commands require a typed confirmation, checked server-side.")
     if not claudelink.resolve_cli():
         print("No `claude` CLI found — questions queue; read them with `algo ask --pending`.")
