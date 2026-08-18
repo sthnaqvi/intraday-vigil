@@ -204,3 +204,86 @@ def test_short_trigger_places_buy_stop_above(tmp_path, monkeypatch):
     assert kite.place_calls[0]["transaction_type"] == "SELL"
     assert kite.place_calls[1]["transaction_type"] == "BUY"
     assert kite.place_calls[1]["trigger_price"] > 1295.0, "short stop must sit above entry"
+
+
+# ---------- TriggerEngine: transport-free, fed by a FakeFeed ----------
+
+class FakeFeed:
+    """A PriceFeed that fires prices on command instead of from a real transport — stands
+    in for both KiteTickerFeed and PollingFeed, since TriggerEngine can't tell them apart."""
+
+    def __init__(self):
+        self.started_with: list[str] | None = None
+        self.on_price = None
+        self.stopped = False
+
+    def start(self, symbols, on_price):
+        self.started_with = symbols
+        self.on_price = on_price
+        return True
+
+    def stop(self):
+        self.stopped = True
+
+    def push(self, symbol: str, ltp: float, source: str = "ws") -> None:
+        """Simulate one price update arriving from whatever transport this stands in for."""
+        self.on_price(symbol, ltp, source)
+
+
+def test_trigger_engine_fires_auto_trigger_on_price(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+    feed = FakeFeed()
+    feed.start(["RELIANCE"], engine.on_price)
+
+    feed.push("RELIANCE", 1329.0, source="ws")
+
+    kinds = [c["order_type"] for c in kite.place_calls]
+    assert kinds == ["MARKET", "SL-M"]
+    fired = T.load()[0]
+    assert fired.status == T.FIRED
+    assert _events(tmp_path, "TRIGGER_HIT")[0]["data"]["source"] == "ws"
+
+
+def test_trigger_engine_below_level_does_not_fire(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("RELIANCE", 1300.0, "poll")
+
+    assert kite.place_calls == []
+    assert T.load()[0].status == T.ARMED
+
+
+def test_trigger_engine_manual_trigger_alerts_but_does_not_place(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=False)])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("RELIANCE", 1329.0, "poll")
+
+    assert kite.place_calls == [], "auto=False must never place an order"
+    t = T.load()[0]
+    assert t.status == T.CANCELLED and "auto disabled" in t.detail
+
+
+def test_trigger_engine_ignores_prices_for_other_symbols(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("HCLTECH", 5000.0, "poll")
+
+    assert kite.place_calls == []
+    assert T.load()[0].status == T.ARMED

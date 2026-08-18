@@ -17,10 +17,12 @@ from typing import Callable
 from . import clock, config, execution, levels, rules, state as state_mod
 from .broker import Broker, TokenException
 from .events import EventLog, logger
+from .feed import KiteTickerFeed, PollingFeed
 from .models import Quote
 from .notify import alert_dialog, notify
 from .rules import Direction, ModifyIntent
 from .state import SessionState, TrackedPosition
+from .triggers import TriggerEngine
 
 
 class MonitorLoop:
@@ -40,7 +42,9 @@ class MonitorLoop:
         self.failed_cycles = 0
         self.cycles_run = 0
         self._tokens: dict[str, int] = {}
-        self.watcher = None  # TriggerWatcher, when anything is armed
+        self.trigger_engine = TriggerEngine(broker, events, session)
+        self.feed: KiteTickerFeed | None = None  # push feed, when anything is armed
+        self._polling_feed = PollingFeed(broker)
 
     # ---------- level helpers ----------
 
@@ -454,7 +458,7 @@ class MonitorLoop:
         logger.info("\n".join(lines))
 
     def _sync_trigger_subscriptions(self) -> None:
-        """Restart the tick subscription when the armed set changes.
+        """Restart the push feed's subscription when the armed set changes.
 
         Without this, `vigil arm` only took effect after a full daemon restart — and a
         restart with a live position is exactly what we want to avoid.
@@ -464,54 +468,27 @@ class MonitorLoop:
         try:
             from . import triggers as triggers_mod
             want = {t.symbol for t in triggers_mod.armed(triggers_mod.load())}
-            have = set(getattr(self.watcher, "token_to_symbol", {}).values())
+            have = set(getattr(self.feed, "token_to_symbol", {}).values())
             if want == have:
                 return
-            if self.watcher is not None:
-                self.watcher.stop()
-                self.watcher = None
+            if self.feed is not None:
+                self.feed.stop()
+                self.feed = None
             if want:
-                self._start_trigger_watcher()
+                self._start_trigger_feed()
                 self.events.emit("TICKER_RESUBSCRIBED", symbols=sorted(want))
         except Exception as e:
             self.events.emit("WARNING", message=f"trigger resubscribe failed: {e!r}")
 
     def _poll_triggers(self) -> None:
-        """Cycle-cadence safety net for armed triggers when ticks are not flowing."""
+        """Cycle-cadence safety net for armed triggers when ticks are not flowing. Feeds
+        the same TriggerEngine the WebSocket feed does, through the same lock."""
         if self.broker.dry_run:
             return
         try:
             from . import triggers as triggers_mod
-        except Exception:
-            return
-        try:
-            all_t = triggers_mod.load()
-            live = triggers_mod.armed(all_t)
-            if not live:
-                return
-            symbols = sorted({t.symbol for t in live})
-            quotes = self.broker.quotes([f"NSE:{s}" for s in symbols])
-            changed = False
-            for t in live:
-                q = quotes.get(f"NSE:{t.symbol}")
-                if not q:
-                    continue
-                ltp = float(q.last_price)
-                if not t.crossed(ltp):
-                    continue
-                changed = True
-                self.events.emit("TRIGGER_HIT", t.symbol, level=t.level, ltp=ltp,
-                                 side=t.side, auto=t.auto, source="poll")
-                if t.auto:
-                    triggers_mod.execute(t, self.broker, self.events, self.session, ltp)
-                else:
-                    t.status = triggers_mod.CANCELLED
-                    t.detail = f"level hit at {ltp} (poll) — auto disabled, not placed"
-                    alert_dialog(f"{t.symbol} hit {t.level} (ltp {ltp}). Auto-execute is OFF, "
-                                 "so nothing was placed.")
-                    notify(f"{t.symbol} hit {t.level} — NOT placed (auto off)", sound=True)
-            if changed:
-                triggers_mod.save(all_t)
+            symbols = sorted({t.symbol for t in triggers_mod.armed(triggers_mod.load())})
+            self._polling_feed.poll(symbols, self.trigger_engine.on_price)
         except Exception as e:
             self.events.emit("WARNING", message=f"trigger poll failed: {e!r}")
 
@@ -520,25 +497,28 @@ class MonitorLoop:
     def run(self, force: bool = False, sleep_fn: Callable = _time.sleep) -> None:
         self.events.emit("DAEMON_START", mode="dry_run" if self.broker.dry_run else "live")
         holidays = clock.load_holidays()
-        self._start_trigger_watcher()
+        self._start_trigger_feed()
         try:
             self._run_loop(force, sleep_fn, holidays)
         finally:
-            if self.watcher is not None:
-                self.watcher.stop()
+            if self.feed is not None:
+                self.feed.stop()
 
-    def _start_trigger_watcher(self) -> None:
-        """Bring up the tick WebSocket if anything is armed. Never fatal — the cycle-level
+    def _start_trigger_feed(self) -> None:
+        """Bring up the push feed if anything is armed. Never fatal — the cycle-level
         poll in step 3b still catches breaks, just with up to one cycle of latency."""
         if self.broker.dry_run:
             return
         try:
-            from .triggers import TriggerWatcher
-            watcher = TriggerWatcher(self.broker, self.events, self.session)
-            if watcher.start():
-                self.watcher = watcher
+            from . import triggers as triggers_mod
+            symbols = sorted({t.symbol for t in triggers_mod.armed(triggers_mod.load())})
+            if not symbols:
+                return
+            feed = KiteTickerFeed(self.broker, self.events)
+            if feed.start(symbols, self.trigger_engine.on_price):
+                self.feed = feed
         except Exception as e:
-            self.events.emit("WARNING", message=f"trigger watcher failed to start: {e!r}")
+            self.events.emit("WARNING", message=f"trigger feed failed to start: {e!r}")
 
     def _run_loop(self, force: bool, sleep_fn: Callable, holidays) -> None:
         while True:

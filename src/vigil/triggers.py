@@ -1,9 +1,12 @@
-"""Armed entry triggers, watched over Kite's tick WebSocket.
+"""Armed entry triggers: the data model, persistence, entry gate, and TriggerEngine — the
+transport-free logic that decides what to do when a price update arrives. What actually
+delivers those price updates (KiteTickerFeed's WebSocket, or PollingFeed's cycle-cadence
+quotes) lives in feed.py and doesn't appear here at all.
 
 Why this exists: entries used to be placed by Claude over the MCP session, on a ~180s
 poll. Two problems — the MCP token dies roughly hourly, and a 180s poll can miss a level
 break by minutes. Both are solved by moving the watch and the execution into the daemon,
-which holds a token valid for the whole trading day and receives ticks in real time.
+which holds a token valid for the whole trading day and can receive ticks in real time.
 
 A trigger is a standing intent: "if RELIANCE trades above 1328.60, buy 590 MIS and protect
 it at sl_pct". `auto: false` (default) alerts loudly and leaves the decision to the human.
@@ -20,9 +23,9 @@ import threading
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from . import clock, config, execution, levels, rules
+from . import clock, config, execution, rules
 from .broker import Broker
-from .events import EventLog, logger
+from .events import EventLog
 from .notify import alert_dialog, notify
 from .rules import Direction
 
@@ -187,122 +190,53 @@ def _write_seed(trigger: Trigger, entry: float, sl_price: float) -> None:
     os.replace(tmp, config.RISK_FILE)
 
 
-# ---------- websocket watcher ----------
+# ---------- trigger engine (transport-free) ----------
 
-class TriggerWatcher:
-    """Subscribes to ticks for every armed trigger and acts the moment a level breaks.
-
-    Runs on KiteTicker's own background thread, so the monitor loop is untouched. All
-    mutation of shared trigger state happens under a lock.
+class TriggerEngine:
+    """Decides what to do when a price update for a symbol arrives — crossed level, fire
+    or alert — with no idea whether that price came from a WebSocket tick (feed.py's
+    KiteTickerFeed) or a poll cycle (feed.py's PollingFeed). Both transports call the same
+    on_price(), through the same lock, so they can never race each other mutating trigger
+    state — which is exactly what the old poll fallback and the old WebSocket handler did
+    before this: the same match-and-fire logic, duplicated in two places, one of them with
+    no lock at all.
     """
 
     def __init__(self, broker: Broker, events: EventLog, session: Any,
-                 on_fire: Callable[[Trigger], None] | None = None):
+                on_fire: Callable[[Trigger], None] | None = None):
         self.broker = broker
         self.events = events
         self.session = session
         self.on_fire = on_fire
-        self.ticker = None
         self.lock = threading.Lock()
-        self.token_to_symbol: dict[int, str] = {}
-        self._running = False
 
-    def _resolve_tokens(self, symbols: list[str]) -> dict[str, int]:
-        return levels.instrument_tokens(self.broker, symbols)
-
-    def start(self) -> bool:
-        """Connect and subscribe. Returns False if there is nothing armed or no ticker."""
-        triggers = armed(load())
-        if not triggers:
-            return False
-        try:
-            from kiteconnect import KiteTicker
-        except Exception as e:  # pragma: no cover
-            self.events.emit("WARNING", message=f"KiteTicker unavailable ({e}) — "
-                                                "triggers fall back to the monitor cycle")
-            return False
-
-        symbols = sorted({t.symbol for t in triggers})
-        mapping = self._resolve_tokens(symbols)
-        missing = [s for s in symbols if s not in mapping]
-        if missing:
-            self.events.emit("WARNING", message=f"no instrument token for {missing}")
-        if not mapping:
-            return False
-        self.token_to_symbol = {v: k for k, v in mapping.items()}
-
-        token_file = json.loads(config.TOKEN_FILE.read_text())
-        self.ticker = KiteTicker(token_file["api_key"], token_file["access_token"])
-        tokens = list(self.token_to_symbol)
-
-        def on_connect(ws, _response):
-            ws.subscribe(tokens)
-            ws.set_mode(ws.MODE_LTP, tokens)
-            self.events.emit("TICKER_CONNECTED", symbols=symbols, tokens=tokens)
-
-        def on_ticks(_ws, ticks):
-            try:
-                self._on_ticks(ticks)
-            except Exception as e:  # never let a bad tick kill the socket
-                self.events.emit("ERROR", message=f"tick handler failed: {e!r}")
-
-        def on_close(_ws, code, reason):
-            self.events.emit("TICKER_CLOSED", code=str(code), reason=str(reason))
-
-        def on_error(_ws, code, reason):
-            self.events.emit("TICKER_ERROR", code=str(code), reason=str(reason))
-
-        self.ticker.on_connect = on_connect
-        self.ticker.on_ticks = on_ticks
-        self.ticker.on_close = on_close
-        self.ticker.on_error = on_error
-        # threaded=True keeps the reactor off the monitor loop's thread; reconnects are
-        # handled by KiteTicker itself.
-        self.ticker.connect(threaded=True, disable_ssl_verification=False)
-        self._running = True
-        logger.info("[TICKER] watching %s", ", ".join(symbols))
-        return True
-
-    def _on_ticks(self, ticks: list[dict]) -> None:
+    def on_price(self, symbol: str, ltp: float, source: str) -> None:
         with self.lock:
-            triggers = load()
-            live = armed(triggers)
+            all_t = load()
+            live = [t for t in armed(all_t) if t.symbol == symbol]
             if not live:
                 return
             changed = False
-            for tick in ticks:
-                symbol = self.token_to_symbol.get(tick.get("instrument_token"))
-                ltp = tick.get("last_price")
-                if not symbol or ltp is None:
+            for t in live:
+                if not t.crossed(ltp):
                     continue
-                for t in live:
-                    if t.symbol != symbol or t.status != ARMED or not t.crossed(float(ltp)):
-                        continue
-                    changed = True
-                    self.events.emit("TRIGGER_HIT", symbol, level=t.level, ltp=float(ltp),
-                                     side=t.side, auto=t.auto)
-                    if t.auto:
-                        execute(t, self.broker, self.events, self.session, float(ltp))
-                    else:
-                        t.status = CANCELLED
-                        t.detail = f"level hit at {ltp} — auto disabled, not placed"
-                        alert_dialog(
-                            f"{symbol} hit {t.level} (ltp {ltp}).\n\n"
-                            f"Ready: {t.direction} {t.qty} @ market, SL {t.sl_pct:.2%}.\n"
-                            "Auto-execute is OFF, so nothing was placed. "
-                            f"Run: vigil enter {symbol} --side {t.direction.lower()} "
-                            f"--qty {t.qty} --sl-pct {t.sl_pct * 100:.2f}"
-                        )
-                        notify(f"{symbol} hit {t.level} — NOT placed (auto off)", sound=True)
-                    if self.on_fire:
-                        self.on_fire(t)
+                changed = True
+                self.events.emit("TRIGGER_HIT", symbol, level=t.level, ltp=ltp,
+                                 side=t.side, auto=t.auto, source=source)
+                if t.auto:
+                    execute(t, self.broker, self.events, self.session, ltp)
+                else:
+                    t.status = CANCELLED
+                    t.detail = f"level hit at {ltp} ({source}) — auto disabled, not placed"
+                    alert_dialog(
+                        f"{symbol} hit {t.level} (ltp {ltp}).\n\n"
+                        f"Ready: {t.direction} {t.qty} @ market, SL {t.sl_pct:.2%}.\n"
+                        "Auto-execute is OFF, so nothing was placed. "
+                        f"Run: vigil enter {symbol} --side {t.direction.lower()} "
+                        f"--qty {t.qty} --sl-pct {t.sl_pct * 100:.2f}"
+                    )
+                    notify(f"{symbol} hit {t.level} — NOT placed (auto off)", sound=True)
+                if self.on_fire:
+                    self.on_fire(t)
             if changed:
-                save(triggers)
-
-    def stop(self) -> None:
-        if self.ticker is not None and self._running:
-            try:
-                self.ticker.close()
-            except Exception:
-                pass
-            self._running = False
+                save(all_t)
