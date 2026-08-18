@@ -137,8 +137,11 @@ class MonitorLoop:
 
     def _squareoff(self) -> None:
         self.events.emit("SQUAREOFF_START")
-        notify("15:05 — squaring off all MIS positions (ahead of Zerodha 15:10)", sound=True)
+        notify(f"{config.SQUAREOFF_AT.strftime('%H:%M')} — squaring off all MIS positions "
+              f"(ahead of the broker's own {config.BROKER_SQUAREOFF_AT.strftime('%H:%M')})",
+              sound=True)
         self.session.squareoff_done = True
+        symbols = list(self.session.positions)
         for tp in list(self.session.positions.values()):
             try:
                 self.broker.cancel_order(tp.sl_order_id)
@@ -148,7 +151,7 @@ class MonitorLoop:
             self.events.emit("SQUAREOFF_FILL", tp.symbol, quantity=tp.qty)
         # final reconcile records the exits with reason SQUAREOFF
         if not self.broker.dry_run:
-            _time.sleep(2)
+            self._wait_until_flat(symbols)
         report = state_mod.reconcile(
             self.session, self.broker.positions_day(), self.broker.orders(),
             state_mod.load_risk_seeds(),
@@ -166,6 +169,23 @@ class MonitorLoop:
             f"Session done. Realised: Rs {self.session.realized_pnl_today} "
             f"({self.session.realized_r_today}R)"
         )
+
+    def _wait_until_flat(self, symbols: list[str], timeout_s: float = 10.0,
+                         poll_s: float = 1.0) -> None:
+        """Poll positions_day() until every symbol just market-exited shows flat, instead
+        of trusting a fixed sleep(2). A market order accepted by the API is not the same
+        moment as the fill landing in positions() — reconciling against a fixed sleep would
+        either race a slow fill (still shows open, gets mis-read) or waste time waiting
+        past a fast one every single day."""
+        deadline = _time.monotonic() + timeout_s
+        while _time.monotonic() < deadline:
+            open_now = state_mod.open_mis_positions(self.broker.positions_day())
+            if not any(s in open_now for s in symbols):
+                return
+            _time.sleep(poll_s)
+        self.events.emit("WARNING", message=f"squareoff: positions still open after "
+                         f"{timeout_s:.0f}s poll — reconciling with whatever the broker "
+                         "reports now")
 
     # ---------- one cycle ----------
 
@@ -385,6 +405,13 @@ class MonitorLoop:
 
         # 6. Status snapshot + console table
         interval = rules.cycle_interval(any_near)
+        next_action_s = rules.seconds_until_next_action(now, set(self.session.fired))
+        if next_action_s is not None:
+            # A flat cycle interval knows nothing about the clock — it can sleep straight
+            # past a scheduled alert or squareoff if a cycle happens to finish just before
+            # one is due. Clamping to whichever is sooner is what actually guarantees the
+            # daemon wakes up in time to act, not just "usually does".
+            interval = min(interval, max(next_action_s, 1))
         blocked, why = rules.no_new_entries(now, self.session.kill_switch)
         snapshot = {
             "as_of": now.isoformat(),
@@ -519,7 +546,8 @@ class MonitorLoop:
             # started before the bell on a market day: wait for the open
             if (clock.is_market_day(now.date(), holidays)
                     and now.time() < config.MARKET_OPEN and not force):
-                logger.info("[%s] Market opens at 09:15 — waiting.", now.strftime("%H:%M:%S"))
+                logger.info("[%s] Market opens at %s — waiting.",
+                           now.strftime("%H:%M:%S"), config.MARKET_OPEN.strftime("%H:%M"))
                 sleep_fn(60)
                 continue
             if not clock.is_market_open(now, holidays) and not force:

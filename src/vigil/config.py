@@ -1,7 +1,8 @@
 """All rule constants in one place. Spec: ~/.claude/skills/intraday-trader/references/sl-rules.md"""
 import os
-from datetime import time
 from pathlib import Path
+
+from .market_profile import NSE
 
 # PROJECT_ROOT is the source checkout directory (three levels up from this file: config.py
 # -> vigil/ -> src/ -> repo root). Kept for introspection/debugging only — it must never be
@@ -49,7 +50,7 @@ PHASE3_R = 1.5            # trail threshold
 TRAIL_MULT = 2.0          # trail_pct = TRAIL_MULT * sl_pct  (never a fixed 5%)
 TRAIL_MIN_MOVE = 0.005    # only modify if SL moves > 0.5%
 STOP_HUNT_BUFFER = 0.003  # keep SL 0.3% clear of PDH/PDL/day-H/L
-NSE_TICK = 0.05
+NSE_TICK = NSE.tick
 
 # Cadence
 CYCLE_NORMAL_S = 150
@@ -66,23 +67,19 @@ KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries
 # `vigil protect SYMBOL` re-places on demand.
 AUTO_REPROTECT = False
 
-# Session times (IST)
-MARKET_OPEN = time(9, 15)
-MARKET_CLOSE = time(15, 30)
-NO_NEW_ENTRIES_AFTER = time(14, 30)
-
+# Session times (IST) — all derived from the NSE MarketProfile (market_profile.py), whose
+# __post_init__ enforces that SQUAREOFF_AT leaves a real head start before
+# BROKER_SQUAREOFF_AT, and whose time_alerts() computes alert text from the actual
+# configured times instead of hand-typed minute counts that could drift out of sync.
+MARKET_OPEN = NSE.market_open
+MARKET_CLOSE = NSE.market_close
+NO_NEW_ENTRIES_AFTER = NSE.no_new_entries_after
 # Zerodha force-squares MIS at 15:10 (auction/closing rule). The daemon MUST finish before
 # that or the broker wins the race: we take its market fill instead of a controlled exit,
-# and SQUAREOFF_FILL bookkeeping races a position that is already flat. Both used to be
-# 15:10, giving the daemon zero head start.
-BROKER_SQUAREOFF_AT = time(15, 10)
-SQUAREOFF_AT = time(15, 5)
-TIME_ALERTS = {
-    "alert_1400": (time(14, 0), "1h 5m to auto-squareoff (15:05). Review open positions."),
-    "alert_1430": (time(14, 30), "35 min left. No new entries from now. Consider exiting losers."),
-    "alert_1445": (time(14, 45), "Exit manually now or hold till the 15:05 auto square-off "
-                                 "(Zerodha force-squares at 15:10)."),
-}
+# and SQUAREOFF_FILL bookkeeping races a position that is already flat.
+BROKER_SQUAREOFF_AT = NSE.venue_squareoff_at
+SQUAREOFF_AT = NSE.squareoff_at
+TIME_ALERTS = NSE.time_alerts()
 
 # API behaviour
 # Zerodha rejects API market orders (MARKET, and SL-M modifies) without market

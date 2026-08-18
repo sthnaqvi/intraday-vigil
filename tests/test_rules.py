@@ -157,6 +157,30 @@ def test_time_actions_fire_once_each():
                                                "squareoff"}) == []
 
 
+def test_seconds_until_next_action_clamps_below_a_flat_cycle_interval():
+    """The regression this exists for: a cycle finishing just before squareoff must not
+    sleep a flat 150s straight past it."""
+    dt = lambda h, m, s=0: datetime(2026, 8, 17, h, m, s, tzinfo=IST)  # noqa: E731
+    # squareoff at 15:05; cycle finishes at 15:03:30 -> 90s left, less than the 150s a
+    # flat CYCLE_NORMAL_S interval would pick.
+    s = rules.seconds_until_next_action(dt(15, 3, 30), set())
+    assert s == 90
+    assert min(rules.cycle_interval(False), max(s, 1)) == 90
+
+
+def test_seconds_until_next_action_skips_fired_actions():
+    dt = lambda h, m: datetime(2026, 8, 17, h, m, tzinfo=IST)  # noqa: E731
+    # alert_1400 already fired; next is alert_1430 at 14:30, 15 min away.
+    s = rules.seconds_until_next_action(dt(14, 15), {"alert_1400"})
+    assert s == 15 * 60
+
+
+def test_seconds_until_next_action_none_after_everything_fired():
+    dt = lambda h, m: datetime(2026, 8, 17, h, m, tzinfo=IST)  # noqa: E731
+    fired = {"alert_1400", "alert_1430", "alert_1445", "squareoff"}
+    assert rules.seconds_until_next_action(dt(15, 30), fired) is None
+
+
 def test_no_new_entries_gates():
     dt = lambda h, m: datetime(2026, 8, 17, h, m, tzinfo=IST)  # noqa: E731
     assert rules.no_new_entries(dt(10, 0), False) == (False, None)

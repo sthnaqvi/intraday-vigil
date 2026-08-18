@@ -47,9 +47,10 @@ def cmd_start(args) -> int:
         return proc.returncode
 
     mode = "DRY RUN" if args.dry_run else "LIVE"
-    print(f"Daemon started ({mode}, pid {proc.pid}). It waits for the 09:15 bell if early,\n"
-          f"squares off at 15:05, and exits on its own. `vigil status` any time; "
-          f"`vigil stop` to halt.")
+    print(f"Daemon started ({mode}, pid {proc.pid}). It waits for the "
+          f"{config.MARKET_OPEN.strftime('%H:%M')} bell if early,\n"
+          f"squares off at {config.SQUAREOFF_AT.strftime('%H:%M')}, and exits on its own. "
+          f"`vigil status` any time; `vigil stop` to halt.")
     return 0
 
 

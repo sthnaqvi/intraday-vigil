@@ -156,9 +156,29 @@ def due_time_actions(now: datetime, fired: set[str]) -> list[str]:
     return due
 
 
+def seconds_until_next_action(now: datetime, fired: set[str]) -> int | None:
+    """Seconds until the next not-yet-fired time alert or squareoff, or None if nothing
+    remains today. The run loop clamps its sleep to this: a flat 150s cycle interval that
+    ignores the clock can sleep straight past squareoff if a cycle happens to finish just
+    before it, eating into the head start SQUAREOFF_AT is supposed to have on the broker's
+    own force-square."""
+    candidates = [t for key, (t, _msg) in config.TIME_ALERTS.items() if key not in fired]
+    if "squareoff" not in fired:
+        candidates.append(config.SQUAREOFF_AT)
+    if not candidates:
+        return None
+    today = now.date()
+    future = [
+        (datetime.combine(today, t, tzinfo=now.tzinfo) - now).total_seconds()
+        for t in candidates
+    ]
+    future = [d for d in future if d > 0]
+    return int(min(future)) if future else None
+
+
 def no_new_entries(now: datetime, kill_switch: bool) -> tuple[bool, str | None]:
     if kill_switch:
-        return True, "kill_switch: daily realised R <= -2.0"
+        return True, f"kill_switch: daily realised R <= {config.KILL_SWITCH_R}"
     if now.time() >= config.NO_NEW_ENTRIES_AFTER:
-        return True, "past 14:30 IST hard cutoff"
+        return True, f"past {config.NO_NEW_ENTRIES_AFTER.strftime('%H:%M')} IST hard cutoff"
     return False, None

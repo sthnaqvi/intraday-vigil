@@ -150,6 +150,20 @@ def test_squareoff_at_1510_cancels_and_exits_everything(tmp_path):
     assert loop.session.closed and loop.session.closed[0]["exit_reason"] == "SQUAREOFF"
 
 
+def test_squareoff_wait_until_flat_warns_instead_of_hanging_if_never_flat(tmp_path):
+    """A stuck fill must not hang the daemon forever — poll for a bounded time, then warn
+    and proceed with whatever the broker reports, rather than a blind sleep(2) that could
+    either race a slow fill or waste time waiting past a fast one."""
+    kite = MockKite()
+    seed_indigo_long(kite)  # INDIGO stays open the whole time — simulates a stuck fill
+    loop = make_loop(tmp_path, kite, now=(15, 11))
+
+    loop._wait_until_flat(["INDIGO"], timeout_s=0.3, poll_s=0.1)
+
+    events_file = next((tmp_path / "data").glob("events-*.jsonl"))
+    assert "still open after" in events_file.read_text()
+
+
 def test_dry_run_never_mutates(tmp_path):
     kite = MockKite()
     seed_indigo_long(kite)
