@@ -11,7 +11,7 @@ import time
 import traceback
 from datetime import datetime
 
-from . import audit, auth, clock, config, levels, rules, state as state_mod
+from . import audit, auth, clock, config, levels, notify, rules, state as state_mod
 from . import triggers as triggers_mod
 from .broker import Broker
 from .events import EventLog, setup_logging
@@ -54,10 +54,24 @@ def cmd_start(args) -> int:
         cmd.append("--dry-run")
     if args.force:
         cmd.append("--force")
-    with (config.LOGS_DIR / "daemon.out").open("a") as out:
+    if args.allow_silent:
+        cmd.append("--allow-silent")
+    daemon_out = config.LOGS_DIR / "daemon.out"
+    with daemon_out.open("a") as out:
         proc = subprocess.Popen(cmd, cwd=config.PROJECT_ROOT, stdout=out, stderr=out,
                                 start_new_session=True)
     config.PID_FILE.write_text(str(proc.pid))
+
+    # The notifier check (and the market-hours check) both happen before any network
+    # I/O, so a refusal exits almost instantly. Without this grace check the user sees
+    # "Daemon started" and only discovers the refusal by tailing daemon.out.
+    time.sleep(0.5)
+    if proc.poll() is not None and proc.returncode != 0:
+        tail = "\n".join(daemon_out.read_text().splitlines()[-6:]) if daemon_out.exists() else ""
+        config.PID_FILE.unlink(missing_ok=True)
+        print(f"Daemon exited immediately (code {proc.returncode}):\n{tail}", file=sys.stderr)
+        return proc.returncode
+
     mode = "DRY RUN" if args.dry_run else "LIVE"
     print(f"Daemon started ({mode}, pid {proc.pid}). It waits for the 09:15 bell if early,\n"
           f"squares off at 15:05, and exits on its own. `algo status` any time; "
@@ -194,6 +208,17 @@ def cmd_add_position(args) -> int:
 
 
 def cmd_monitor(args) -> int:
+    # A daemon that manages real money must be able to reach the user. dry-run mode
+    # places no orders, so it's exempt — but live mode with no working notifier means
+    # SL hits, unprotected positions, and token expiry all happen invisibly.
+    if not args.dry_run and not args.allow_silent and not notify.can_notify():
+        print("REFUSED — no desktop notifier available (checked: macOS osascript, "
+              "Linux notify-send). A live daemon with no notifier gives you zero alerts "
+              "for SL hits, unprotected positions, or token expiry.\n"
+              "Fix: install a notifier, or run with --allow-silent to accept running "
+              "silent (you'll need to watch `algo status` / the dashboard yourself).",
+              file=sys.stderr)
+        return 3
     broker, events = _live_broker(dry_run=args.dry_run)
     session = SessionState.load_or_create()
     loop = MonitorLoop(broker, events, session)
@@ -585,6 +610,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--dry-run", action="store_true", help="log intents, mutate nothing")
     sp.add_argument("--force", action="store_true", help="run outside market hours")
     sp.add_argument("--paste", action="store_true", help="paste-URL login fallback")
+    sp.add_argument("--allow-silent", action="store_true",
+                    help="start live even if no desktop notifier is available "
+                         "(macOS osascript / Linux notify-send). You will get NO alerts "
+                         "for SL hits, unprotected positions, or token expiry unless "
+                         "you are actively watching the log.")
     sp.set_defaults(fn=cmd_start)
 
     sp = sub.add_parser("stop", help="stop the background daemon (broker SLs stay active)")
@@ -613,6 +643,8 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("monitor", help="run the SL-lifecycle loop in the foreground")
     sp.add_argument("--dry-run", action="store_true", help="log intents, mutate nothing")
     sp.add_argument("--force", action="store_true", help="run outside market hours")
+    sp.add_argument("--allow-silent", action="store_true",
+                    help="run live even if no desktop notifier is available")
     sp.set_defaults(fn=cmd_monitor)
 
     sp = sub.add_parser("squareoff", help="cancel SLs and market-exit all MIS now")
