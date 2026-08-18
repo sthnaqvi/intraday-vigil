@@ -1,11 +1,14 @@
 """Kite Connect daily token flow.
 
 `algo login` opens the browser at kite's login URL; Zerodha redirects to
-http://127.0.0.1:8721/callback?request_token=... which a one-shot local HTTP
+http://127.0.0.1:3100/kite-token-exchange?request_token=... which a one-shot local HTTP
 server captures. `--paste` fallback: user pastes the full redirected URL.
 
 One-time prerequisite: set the app's redirect URL to
-http://127.0.0.1:8721/callback at https://developers.kite.trade.
+http://127.0.0.1:3100/kite-token-exchange at https://developers.kite.trade.
+(Port and path are config.LOGIN_LISTEN_PORT / config.LOGIN_REDIRECT_PATH — this docstring
+previously said :8721/callback, which was never the real listener and would send a first-
+time user's login into a dead redirect.)
 """
 from __future__ import annotations
 
