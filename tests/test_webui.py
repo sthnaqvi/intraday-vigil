@@ -165,10 +165,50 @@ def test_read_log_caps_requested_lines(tmp_path, monkeypatch):
     assert webui.read_log("algo.log", lines=0)["ok"] is True
 
 
-def test_page_carries_the_version_placeholder():
-    """The server substitutes this per request; without it stale-page detection dies."""
-    assert "__UI_VERSION__" in webui.PAGE
-    assert 'const BUILT="__UI_VERSION__"' in webui.PAGE
+def test_index_html_carries_the_version_placeholder():
+    """index.html is the one file served with substitution — without the placeholder,
+    stale-page detection dies. app.js is fully static now, so it reads the version off
+    window.VIGIL_BUILD (set by index.html's inline script) rather than having the value
+    baked into the JS file itself at serve time."""
+    html = (webui.STATIC_DIR / "index.html").read_text()
+    assert "__UI_VERSION__" in html
+    assert 'window.VIGIL_BUILD="__UI_VERSION__"' in html
+
+    js = (webui.STATIC_DIR / "app.js").read_text()
+    assert "const BUILT = window.VIGIL_BUILD;" in js
+    assert "__UI_VERSION__" not in js, "the placeholder must not leak into the static JS"
+
+
+def test_ui_version_is_derived_from_static_file_contents(tmp_path, monkeypatch):
+    """No more manually-bumped version string: the marker changes automatically when
+    the actual served content changes, and is stable when it doesn't."""
+    fake_static = tmp_path / "web_static"
+    fake_static.mkdir()
+    (fake_static / "index.html").write_text("<html>v1</html>")
+    (fake_static / "app.css").write_text("body{color:red}")
+    (fake_static / "app.js").write_text("console.log(1)")
+    monkeypatch.setattr(webui, "STATIC_DIR", fake_static)
+
+    v1 = webui._ui_version()
+    assert v1 == webui._ui_version(), "same content must hash the same every call"
+
+    (fake_static / "app.js").write_text("console.log(2)")
+    assert webui._ui_version() != v1, "changed content must change the version"
+
+
+def test_index_route_serves_html_with_version_substituted():
+    """Exercise the same substitution the real GET / handler performs, without spinning
+    up a live HTTPServer for it."""
+    html = (webui.STATIC_DIR / "index.html").read_text()
+    substituted = html.replace("__UI_VERSION__", webui._ui_version())
+    assert "__UI_VERSION__" not in substituted
+    assert webui._ui_version() in substituted
+
+
+def test_static_content_types_cover_exactly_the_served_files():
+    for name in ("index.html", "app.css", "app.js"):
+        assert (webui.STATIC_DIR / name).exists(), f"{name} missing from web_static/"
+        assert name in webui._CONTENT_TYPES
 
 
 # ---------- audit trail ----------
