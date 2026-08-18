@@ -17,6 +17,7 @@ from typing import Callable
 from . import clock, config, levels, rules, state as state_mod
 from .broker import Broker, TokenException
 from .events import EventLog, logger
+from .models import Quote
 from .notify import alert_dialog, notify
 from .rules import Direction, ModifyIntent
 from .state import SessionState, TrackedPosition
@@ -59,14 +60,13 @@ class MonitorLoop:
                 tp.pdh, tp.pdl = hl
 
     @staticmethod
-    def _levels_for(tp: TrackedPosition, quote: dict) -> list[float]:
-        ohlc = quote.get("ohlc", {})
-        candidates = [tp.pdh, tp.pdl, ohlc.get("high"), ohlc.get("low")]
+    def _levels_for(tp: TrackedPosition, quote: Quote) -> list[float]:
+        candidates = [tp.pdh, tp.pdl, quote.ohlc.high, quote.ohlc.low]
         return [float(lv) for lv in candidates if lv]
 
     # ---------- SL execution ----------
 
-    def _execute_intent(self, tp: TrackedPosition, intent: ModifyIntent, quote: dict) -> None:
+    def _execute_intent(self, tp: TrackedPosition, intent: ModifyIntent, quote: Quote) -> None:
         """Send the modify, verify it landed, only then advance state.
         If the order died (rejected/cancelled) while the position is open, re-place."""
         try:
@@ -92,11 +92,11 @@ class MonitorLoop:
             o = state_mod.order_by_id(orders, intent.order_id)
             verified = (
                 o is not None
-                and o.get("status") in state_mod.PENDING_STATUSES
-                and abs((o.get("trigger_price") or 0) - intent.trigger_price) < config.NSE_TICK
-                and o.get("quantity") == intent.quantity
+                and o.status in state_mod.PENDING_STATUSES
+                and abs((o.trigger_price or 0) - intent.trigger_price) < config.NSE_TICK
+                and o.quantity == intent.quantity
             )
-            if o is not None and o.get("status") not in state_mod.PENDING_STATUSES and o.get("status") != "COMPLETE":
+            if o is not None and o.status not in state_mod.PENDING_STATUSES and o.status != "COMPLETE":
                 self._replace_if_dead(tp, intent)
                 return
 
@@ -118,9 +118,9 @@ class MonitorLoop:
         if not self.broker.dry_run:
             orders = self.broker.orders()
             o = state_mod.order_by_id(orders, tp.sl_order_id)
-            if o is not None and o.get("status") in state_mod.PENDING_STATUSES:
+            if o is not None and o.status in state_mod.PENDING_STATUSES:
                 return  # original SL survived the failed modify; nothing to do
-            if o is not None and o.get("status") == "COMPLETE":
+            if o is not None and o.status == "COMPLETE":
                 return  # SL fired during the race; reconcile will pick up the exit
         new_id = self.broker.place_sl(tp.symbol, tp.dir, intent.trigger_price, tp.qty)
         tp.sl_order_id = new_id
@@ -212,7 +212,7 @@ class MonitorLoop:
             pos_row = state_mod.open_mis_positions(positions_day)[symbol]
             direction = state_mod.position_direction(pos_row)
             entry = state_mod.position_entry_price(pos_row)
-            qty = abs(pos_row["quantity"])
+            qty = abs(pos_row.quantity)
             if "sl_pct" in seed:
                 sl_pct = float(seed["sl_pct"])
                 lvls = [v for v in (seed.get("pdh"), seed.get("pdl")) if v]
@@ -278,9 +278,9 @@ class MonitorLoop:
         # never happened, leaving a majority of shares naked.
         for tp in self.session.positions.values():
             o = state_mod.order_by_id(orders, tp.sl_order_id)
-            if o and o.get("status") in state_mod.PENDING_STATUSES and o.get("quantity") != tp.qty:
-                was = o.get("quantity")
-                trigger = o.get("trigger_price") or tp.sl_price
+            if o and o.status in state_mod.PENDING_STATUSES and o.quantity != tp.qty:
+                was = o.quantity
+                trigger = o.trigger_price or tp.sl_price
                 if self.broker.dry_run:
                     self.broker.modify_sl(tp.sl_order_id, trigger, tp.qty)
                     self.events.emit("SL_QTY_FIX", tp.symbol, was=was, now=tp.qty)
@@ -293,21 +293,21 @@ class MonitorLoop:
                     alert_dialog(f"{tp.symbol}: SL qty fix FAILED ({was} of {tp.qty} protected). {e}")
                     continue
                 after = state_mod.order_by_id(self.broker.orders(), tp.sl_order_id)
-                if after is not None and after.get("quantity") == tp.qty \
-                        and after.get("status") in state_mod.PENDING_STATUSES:
+                if after is not None and after.quantity == tp.qty \
+                        and after.status in state_mod.PENDING_STATUSES:
                     self.events.emit("SL_QTY_FIX", tp.symbol, was=was, now=tp.qty)
                     notify(f"{tp.symbol} SL qty mismatch fixed: {was} -> {tp.qty}")
                 else:
                     self.events.emit(
                         "SL_MODIFY_REJECTED", tp.symbol, context="qty_fix",
                         wanted_qty=tp.qty,
-                        still_qty=(after or {}).get("quantity"),
-                        exchange_message=(after or {}).get("status_message"),
+                        still_qty=(after.quantity if after else None),
+                        exchange_message=(after.status_message if after else None),
                     )
-                    unprotected = tp.qty - ((after or {}).get("quantity") or 0)
+                    unprotected = tp.qty - ((after.quantity if after else 0) or 0)
                     alert_dialog(
                         f"{tp.symbol}: SL qty fix REJECTED — {unprotected} shares UNPROTECTED. "
-                        f"{(after or {}).get('status_message') or 'no exchange message'}"
+                        f"{(after.status_message if after else None) or 'no exchange message'}"
                     )
                     notify(f"{tp.symbol} SL qty fix REJECTED — {unprotected} shares unprotected",
                            sound=True)
@@ -330,7 +330,7 @@ class MonitorLoop:
                     self.events.emit("WARNING", tp.symbol, message="no quote this cycle")
                     continue
                 self._ensure_pdh_pdl(tp)
-                ltp = q["last_price"]
+                ltp = q.last_price
                 pr = rules.profit_r(ltp, tp.entry, tp.r, tp.dir)
                 new_phase = max(tp.phase, rules.target_phase(pr))
                 if new_phase != tp.phase:
@@ -359,15 +359,15 @@ class MonitorLoop:
                 # once showed a live SL price for an order that had been cancelled.
                 sl_now = state_mod.order_by_id(orders, tp.sl_order_id)
                 protected = (sl_now is not None
-                             and sl_now.get("status") in state_mod.PENDING_STATUSES
-                             and sl_now.get("quantity") == tp.qty)
+                             and sl_now.status in state_mod.PENDING_STATUSES
+                             and sl_now.quantity == tp.qty)
                 position_views.append(
                     {"symbol": tp.symbol, "direction": tp.direction, "entry": tp.entry,
                      "qty": tp.qty, "ltp": ltp, "profit_r": round(pr, 2), "phase": tp.phase,
                      "unrealized_pnl": unrealized,
                      "protected": protected,
-                     "sl_order_status": (sl_now or {}).get("status", "MISSING"),
-                     "sl_order_qty": (sl_now or {}).get("quantity"),
+                     "sl_order_status": sl_now.status if sl_now else "MISSING",
+                     "sl_order_qty": sl_now.quantity if sl_now else None,
                      "sl_order_id": tp.sl_order_id, "sl_price": tp.sl_price,
                      "sl_pct": tp.sl_pct, "trail_pct": tp.trail_pct,
                      "pdh": tp.pdh, "pdl": tp.pdl, "near_sl": is_near}
@@ -469,7 +469,7 @@ class MonitorLoop:
                 q = quotes.get(f"NSE:{t.symbol}")
                 if not q:
                     continue
-                ltp = float(q["last_price"])
+                ltp = float(q.last_price)
                 if not t.crossed(ltp):
                     continue
                 changed = True

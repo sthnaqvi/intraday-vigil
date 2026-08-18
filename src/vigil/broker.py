@@ -8,8 +8,9 @@ from __future__ import annotations
 import time as _time
 from typing import Any
 
-from . import audit, clock, config
+from . import audit, clock, config, mapping
 from .events import EventLog
+from .models import Order, Position, Quote
 from .rules import Direction
 
 try:  # allow tests to run without the package's network deps mattering
@@ -97,14 +98,17 @@ class Broker:
 
     # ---------- reads ----------
 
-    def quotes(self, symbols: list[str]) -> dict:
-        return self._call(self.kite.quote, symbols)
+    def quotes(self, symbols: list[str]) -> dict[str, Quote]:
+        raw = self._call(self.kite.quote, symbols)
+        return {k: mapping.quote_from_kite(v) for k, v in raw.items()}
 
-    def positions_day(self) -> list[dict]:
-        return self._call(self.kite.positions)["day"]
+    def positions_day(self) -> list[Position]:
+        raw = self._call(self.kite.positions)["day"]
+        return [mapping.position_from_kite(p) for p in raw]
 
-    def orders(self) -> list[dict]:
-        return self._call(self.kite.orders)
+    def orders(self) -> list[Order]:
+        raw = self._call(self.kite.orders)
+        return [mapping.order_from_kite(o) for o in raw]
 
     def margins(self) -> dict:
         return self._call(self.kite.margins)

@@ -53,7 +53,7 @@ def cmd_enter(args) -> int:
     ltp = 0.0
     try:
         q = broker.quotes([f"NSE:{t.symbol}"])
-        ltp = float(q[f"NSE:{t.symbol}"]["last_price"])
+        ltp = float(q[f"NSE:{t.symbol}"].last_price)
     except Exception:
         pass
 
@@ -94,7 +94,7 @@ def cmd_add(args) -> int:
         return 3
 
     direction = state_mod.position_direction(pos)
-    old_qty = abs(pos["quantity"])
+    old_qty = abs(pos.quantity)
     old_entry = state_mod.position_entry_price(pos)
 
     sl_order = state_mod.find_sl_order(broker.orders(), symbol, direction)
@@ -102,7 +102,7 @@ def cmd_add(args) -> int:
         print(f"{symbol} has NO resting SL — refusing to add to an unprotected position.",
               file=sys.stderr)
         return 3
-    sl_price = sl_order.get("trigger_price") or 0.0
+    sl_price = sl_order.trigger_price or 0.0
 
     if not args.yes:
         print(f"{symbol} {direction.value}: {old_qty} @ {old_entry:.2f}, SL {sl_price} "
@@ -115,7 +115,7 @@ def cmd_add(args) -> int:
 
     time.sleep(2)
     pos = _open_position(broker, symbol) or pos
-    new_qty = abs(pos["quantity"])
+    new_qty = abs(pos.quantity)
     new_entry = state_mod.position_entry_price(pos)
     eff = round(abs(new_entry - sl_price) / new_entry, 4) if new_entry else 0.0
 
@@ -144,7 +144,7 @@ def cmd_exit(args) -> int:
         print(f"No open MIS position in {symbol}.", file=sys.stderr)
         return 3
     direction = state_mod.position_direction(pos)
-    qty = abs(pos["quantity"])
+    qty = abs(pos.quantity)
 
     if not args.yes:
         print(f"Exit {symbol} {direction.value} {qty} at market (cancels its SL first)?")
@@ -155,7 +155,7 @@ def cmd_exit(args) -> int:
     sl_order = state_mod.find_sl_order(broker.orders(), symbol, direction)
     if sl_order is not None:
         try:
-            broker.cancel(sl_order["order_id"])
+            broker.cancel(sl_order.order_id)
         except Exception as e:
             events.emit("WARNING", symbol, message=f"SL cancel failed before exit: {e}")
             print(f"WARNING: could not cancel the SL ({e}) — it may fill alongside the exit.",
@@ -167,7 +167,7 @@ def cmd_exit(args) -> int:
     if still is None:
         print(f"{symbol}: exit filled — position FLAT.")
     else:
-        print(f"{symbol}: exit sent, still showing {abs(still['quantity'])} open. "
+        print(f"{symbol}: exit sent, still showing {abs(still.quantity)} open. "
               "Re-check with `vigil positions`.")
     return 0
 
@@ -183,13 +183,13 @@ def cmd_protect(args) -> int:
         print(f"No open MIS position in {symbol}.", file=sys.stderr)
         return 3
     direction = state_mod.position_direction(pos)
-    qty = abs(pos["quantity"])
+    qty = abs(pos.quantity)
     entry = state_mod.position_entry_price(pos)
 
     existing = state_mod.find_sl_order(broker.orders(), symbol, direction)
     if existing is not None and not args.force:
-        print(f"{symbol} already has a resting SL (order {existing['order_id']}, "
-              f"trigger {existing['trigger_price']}, qty {existing['quantity']}). "
+        print(f"{symbol} already has a resting SL (order {existing.order_id}, "
+              f"trigger {existing.trigger_price}, qty {existing.quantity}). "
               "Use --force to place another anyway.", file=sys.stderr)
         return 3
 

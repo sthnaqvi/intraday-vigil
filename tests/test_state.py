@@ -2,19 +2,19 @@
 import json
 
 from vigil import config, state as state_mod
+from vigil.models import Order, Position
 from vigil.state import SessionState, TrackedPosition
 
 
 def _pos_row(symbol, qty, buy=0.0, sell=0.0):
-    return {"tradingsymbol": symbol, "exchange": "NSE", "product": "MIS",
-            "quantity": qty, "buy_price": buy, "sell_price": sell,
-            "average_price": buy or sell}
+    return Position(symbol=symbol, exchange="NSE", product="MIS", quantity=qty,
+                    buy_price=buy, sell_price=sell, average_price=buy or sell)
 
 
-def _sl_order(oid, symbol, txn, trigger, qty, status="TRIGGER PENDING"):
-    return {"order_id": oid, "tradingsymbol": symbol, "product": "MIS",
-            "order_type": "SL-M", "transaction_type": txn, "status": status,
-            "trigger_price": trigger, "quantity": qty, "average_price": 0.0}
+def _sl_order(oid, symbol, txn, trigger, qty, status="TRIGGER PENDING", average_price=0.0):
+    return Order(order_id=oid, symbol=symbol, product="MIS", order_type="SL-M",
+                transaction_type=txn, status=status, trigger_price=trigger,
+                quantity=qty, average_price=average_price)
 
 
 def test_discovery_with_seed_and_derived():
@@ -53,8 +53,8 @@ def test_profitable_trail_exit_detected_via_complete_status():
         breakeven_done=True, trail_started=True,
     )
     positions = [_pos_row("INDIGO", 0, buy=4150.0, sell=4184.6)]
-    orders = [_sl_order("O1", "INDIGO", "SELL", 4184.6, 100, status="COMPLETE")]
-    orders[0]["average_price"] = 4184.6
+    orders = [_sl_order("O1", "INDIGO", "SELL", 4184.6, 100, status="COMPLETE",
+                        average_price=4184.6)]
     report = state_mod.reconcile(s, positions, orders, {})
 
     assert len(report.exited) == 1

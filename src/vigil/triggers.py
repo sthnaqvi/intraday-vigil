@@ -131,8 +131,8 @@ def execute(trigger: Trigger, broker: Broker, events: EventLog, session: Any,
     fill = ltp
     try:
         for p in broker.positions_day():
-            if p["tradingsymbol"] == trigger.symbol and p["quantity"] != 0:
-                side_price = p["buy_price"] if trigger.dir == Direction.LONG else p["sell_price"]
+            if p.symbol == trigger.symbol and p.quantity != 0:
+                side_price = p.buy_price if trigger.dir == Direction.LONG else p.sell_price
                 if side_price:
                     fill = float(side_price)
                 break

@@ -22,10 +22,10 @@ def cmd_positions(args) -> int:
         entry = state_mod.position_entry_price(row)
         sl = state_mod.find_sl_order(orders, symbol, direction)
         sl_desc = (
-            f"SL {sl['trigger_price']} x{sl['quantity']} ({sl['order_id']})"
+            f"SL {sl.trigger_price} x{sl.quantity} ({sl.order_id})"
             if sl else "NO SL ORDER!"
         )
-        print(f"{symbol:<14}{direction.value:<6}qty {abs(row['quantity']):<6}"
+        print(f"{symbol:<14}{direction.value:<6}qty {abs(row.quantity):<6}"
               f"entry {entry:<10}{sl_desc}")
     return 0
 
@@ -104,10 +104,10 @@ def cmd_quote(args) -> int:
         if not v:
             print(f"  {s:<18} (no data)")
             continue
-        o = v["ohlc"]
-        frm_open = (v["last_price"] - o["open"]) / o["open"] * 100 if o["open"] else 0
-        frm_close = (v["last_price"] - o["close"]) / o["close"] * 100 if o["close"] else 0
-        print(f"  {s:<18} ltp {v['last_price']:>10.2f}  {frm_open:>+6.2f}%open "
-              f"{frm_close:>+6.2f}%prev  O {o['open']:>9.2f} H {o['high']:>9.2f} "
-              f"L {o['low']:>9.2f} C {o['close']:>9.2f}")
+        o = v.ohlc
+        frm_open = (v.last_price - o.open) / o.open * 100 if o.open else 0
+        frm_close = (v.last_price - o.close) / o.close * 100 if o.close else 0
+        print(f"  {s:<18} ltp {v.last_price:>10.2f}  {frm_open:>+6.2f}%open "
+              f"{frm_close:>+6.2f}%prev  O {o.open:>9.2f} H {o.high:>9.2f} "
+              f"L {o.low:>9.2f} C {o.close:>9.2f}")
     return 0

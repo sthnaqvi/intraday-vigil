@@ -12,6 +12,7 @@ from dataclasses import asdict, dataclass, field
 from pathlib import Path
 
 from . import clock, config, rules
+from .models import Order, Position
 from .rules import Direction
 
 SL_ORDER_TYPES = ("SL-M", "SL")
@@ -108,43 +109,39 @@ def save_risk_seeds(seeds: dict[str, dict]) -> None:
 
 # ---------- broker views ----------
 
-def open_mis_positions(positions_day: list[dict]) -> dict[str, dict]:
-    return {
-        p["tradingsymbol"]: p
-        for p in positions_day
-        if p.get("product") == "MIS" and p.get("quantity", 0) != 0
-    }
+def open_mis_positions(positions_day: list[Position]) -> dict[str, Position]:
+    return {p.symbol: p for p in positions_day if p.product == "MIS" and p.quantity != 0}
 
 
-def position_direction(pos_row: dict) -> Direction:
-    return Direction.LONG if pos_row["quantity"] > 0 else Direction.SHORT
+def position_direction(pos: Position) -> Direction:
+    return Direction.LONG if pos.quantity > 0 else Direction.SHORT
 
 
-def position_entry_price(pos_row: dict) -> float:
+def position_entry_price(pos: Position) -> float:
     """VWAP of the entry side (not `average_price`, which nets both sides)."""
-    if pos_row["quantity"] > 0:
-        return pos_row["buy_price"]
-    return pos_row["sell_price"]
+    if pos.quantity > 0:
+        return pos.buy_price
+    return pos.sell_price
 
 
-def find_sl_order(orders: list[dict], symbol: str, direction: Direction) -> dict | None:
+def find_sl_order(orders: list[Order], symbol: str, direction: Direction) -> Order | None:
     """The pending SL protecting this position: opposite side, SL/SL-M, MIS."""
     want_txn = "SELL" if direction == Direction.LONG else "BUY"
     for o in orders:
         if (
-            o.get("tradingsymbol") == symbol
-            and o.get("product") == "MIS"
-            and o.get("order_type") in SL_ORDER_TYPES
-            and o.get("transaction_type") == want_txn
-            and o.get("status") in PENDING_STATUSES
+            o.symbol == symbol
+            and o.product == "MIS"
+            and o.order_type in SL_ORDER_TYPES
+            and o.transaction_type == want_txn
+            and o.status in PENDING_STATUSES
         ):
             return o
     return None
 
 
-def order_by_id(orders: list[dict], order_id: str) -> dict | None:
+def order_by_id(orders: list[Order], order_id: str) -> Order | None:
     for o in orders:
-        if o.get("order_id") == order_id:
+        if o.order_id == order_id:
             return o
     return None
 
@@ -166,8 +163,8 @@ class ReconcileReport:
 
 def reconcile(
     state: SessionState,
-    positions_day: list[dict],
-    orders: list[dict],
+    positions_day: list[Position],
+    orders: list[Order],
     seeds: dict[str, dict],
 ) -> ReconcileReport:
     """Diff broker truth against tracked state. Pure bookkeeping — the caller
@@ -181,20 +178,20 @@ def reconcile(
             continue
         tp = state.positions.pop(symbol)
         sl_order = order_by_id(orders, tp.sl_order_id)
-        pos_row = next((p for p in positions_day if p["tradingsymbol"] == symbol), None)
+        pos_row = next((p for p in positions_day if p.symbol == symbol), None)
 
-        if sl_order and sl_order.get("status") == "COMPLETE":
-            exit_price = sl_order.get("average_price") or tp.sl_price
+        if sl_order and sl_order.status == "COMPLETE":
+            exit_price = sl_order.average_price or tp.sl_price
             reason = {1: "SL_HIT", 2: "BE_STOP", 3: "TRAIL_EXIT"}[tp.phase]
         else:
             reason = "SQUAREOFF" if state.squareoff_done else "MANUAL_EXIT"
             if pos_row is not None:
                 exit_price = (
-                    pos_row["sell_price"] if tp.dir == Direction.LONG else pos_row["buy_price"]
+                    pos_row.sell_price if tp.dir == Direction.LONG else pos_row.buy_price
                 )
             else:
                 exit_price = tp.sl_price
-            if sl_order and sl_order.get("status") in PENDING_STATUSES:
+            if sl_order and sl_order.status in PENDING_STATUSES:
                 report.orphan_sl_cancelled.append(tp.sl_order_id)
 
         r_mult = round(rules.realized_r(tp.entry, exit_price, tp.r, tp.dir), 2)
@@ -223,7 +220,7 @@ def reconcile(
     for symbol, pos_row in open_now.items():
         if symbol in state.positions:
             tp = state.positions[symbol]
-            new_qty = abs(pos_row["quantity"])
+            new_qty = abs(pos_row.quantity)
             # Adding to a position moves the entry VWAP, which changes R and therefore
             # every phase threshold. Re-read entry and the risk.json seed whenever qty
             # changes, not just on first discovery. (A partial exit leaves the entry-side
@@ -257,12 +254,12 @@ def reconcile(
             # 2/3 modify is attempted. A Phase 1 position could sit naked all session while
             # status.json still displayed its old SL price.
             sl = order_by_id(orders, tp.sl_order_id)
-            if sl is None or sl.get("status") not in PENDING_STATUSES:
-                if sl is None or sl.get("status") != "COMPLETE":
+            if sl is None or sl.status not in PENDING_STATUSES:
+                if sl is None or sl.status != "COMPLETE":
                     report.lost_sl.append({
                         "symbol": symbol,
                         "sl_order_id": tp.sl_order_id,
-                        "status": (sl or {}).get("status", "MISSING"),
+                        "status": sl.status if sl else "MISSING",
                         "qty": new_qty,
                         "direction": tp.direction,
                         "last_known_sl": tp.sl_price,
@@ -270,7 +267,7 @@ def reconcile(
             continue
         direction = position_direction(pos_row)
         entry = position_entry_price(pos_row)
-        qty = abs(pos_row["quantity"])
+        qty = abs(pos_row.quantity)
         sl_order = find_sl_order(orders, symbol, direction)
         seed = seeds.get(symbol, {})
 
@@ -278,7 +275,7 @@ def reconcile(
             report.unprotected.append(symbol)
             continue  # monitor decides whether it can place a fresh SL (needs a seed)
 
-        trigger = sl_order.get("trigger_price") or 0.0
+        trigger = sl_order.trigger_price or 0.0
         if "sl_pct" in seed:
             sl_pct, derived = float(seed["sl_pct"]), False
         elif entry > 0 and trigger > 0:
@@ -296,7 +293,7 @@ def reconcile(
             direction=direction.value,
             entry=entry,
             qty=qty,
-            sl_order_id=sl_order["order_id"],
+            sl_order_id=sl_order.order_id,
             sl_price=trigger,
             sl_pct=round(sl_pct, 5),
             sl_pct_derived=derived,
