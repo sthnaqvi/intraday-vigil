@@ -20,7 +20,7 @@ import threading
 from dataclasses import asdict, dataclass, field
 from typing import Any, Callable
 
-from . import clock, config, levels, rules
+from . import clock, config, execution, levels, rules
 from .broker import Broker
 from .events import EventLog, logger
 from .notify import alert_dialog, notify
@@ -118,7 +118,7 @@ def execute(trigger: Trigger, broker: Broker, events: EventLog, session: Any,
         return False
 
     try:
-        entry_id = broker.place_entry(trigger.symbol, trigger.dir, trigger.qty)
+        entry_id = execution.place_entry(broker, trigger.symbol, trigger.dir, trigger.qty)
         trigger.entry_order_id = entry_id
     except Exception as e:
         trigger.status = FAILED
@@ -142,7 +142,7 @@ def execute(trigger: Trigger, broker: Broker, events: EventLog, session: Any,
     guard_levels = [v for v in (trigger.pdh, trigger.pdl) if v]
     sl_price = rules.initial_sl_price(fill, trigger.sl_pct, trigger.dir, guard_levels)
     try:
-        sl_id = broker.place_sl(trigger.symbol, trigger.dir, sl_price, trigger.qty)
+        sl_id = execution.place_sl(broker, trigger.symbol, trigger.dir, sl_price, trigger.qty)
         trigger.sl_order_id = sl_id
     except Exception as e:
         trigger.status = FAILED

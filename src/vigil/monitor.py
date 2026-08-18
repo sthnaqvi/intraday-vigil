@@ -14,7 +14,7 @@ import time as _time
 import traceback as _traceback
 from typing import Callable
 
-from . import clock, config, levels, rules, state as state_mod
+from . import clock, config, execution, levels, rules, state as state_mod
 from .broker import Broker, TokenException
 from .events import EventLog, logger
 from .models import Quote
@@ -70,7 +70,7 @@ class MonitorLoop:
         """Send the modify, verify it landed, only then advance state.
         If the order died (rejected/cancelled) while the position is open, re-place."""
         try:
-            self.broker.modify_sl(intent.order_id, intent.trigger_price, intent.quantity)
+            self.broker.modify_stop_order(intent.order_id, intent.trigger_price, intent.quantity)
         except TokenException:
             raise
         except Exception as e:
@@ -122,7 +122,7 @@ class MonitorLoop:
                 return  # original SL survived the failed modify; nothing to do
             if o is not None and o.status == "COMPLETE":
                 return  # SL fired during the race; reconcile will pick up the exit
-        new_id = self.broker.place_sl(tp.symbol, tp.dir, intent.trigger_price, tp.qty)
+        new_id = execution.place_sl(self.broker, tp.symbol, tp.dir, intent.trigger_price, tp.qty)
         tp.sl_order_id = new_id
         tp.sl_price = intent.trigger_price
         if intent.reason == "breakeven_+1R":
@@ -141,10 +141,10 @@ class MonitorLoop:
         self.session.squareoff_done = True
         for tp in list(self.session.positions.values()):
             try:
-                self.broker.cancel(tp.sl_order_id)
+                self.broker.cancel_order(tp.sl_order_id)
             except Exception as e:
                 self.events.emit("WARNING", tp.symbol, message=f"SL cancel failed: {e}")
-            self.broker.place_market_exit(tp.symbol, tp.dir, tp.qty)
+            execution.place_market_exit(self.broker, tp.symbol, tp.dir, tp.qty)
             self.events.emit("SQUAREOFF_FILL", tp.symbol, quantity=tp.qty)
         # final reconcile records the exits with reason SQUAREOFF
         if not self.broker.dry_run:
@@ -180,7 +180,7 @@ class MonitorLoop:
         report = state_mod.reconcile(self.session, positions_day, orders, seeds)
         for oid in report.orphan_sl_cancelled:
             try:
-                self.broker.cancel(oid)
+                self.broker.cancel_order(oid)
                 self.events.emit("ORPHAN_SL_CANCELLED", data_order_id=oid)
             except Exception as e:
                 self.events.emit("WARNING", message=f"orphan SL cancel failed: {e}")
@@ -217,7 +217,7 @@ class MonitorLoop:
                 sl_pct = float(seed["sl_pct"])
                 lvls = [v for v in (seed.get("pdh"), seed.get("pdl")) if v]
                 trigger = rules.initial_sl_price(entry, sl_pct, direction, lvls)
-                new_id = self.broker.place_sl(symbol, direction, trigger, qty)
+                new_id = execution.place_sl(self.broker, symbol, direction, trigger, qty)
                 self.session.positions[symbol] = TrackedPosition(
                     symbol=symbol, direction=direction.value, entry=entry, qty=qty,
                     sl_order_id=new_id, sl_price=trigger, sl_pct=sl_pct,
@@ -244,7 +244,7 @@ class MonitorLoop:
                 lvls = [v for v in (seed.get("pdh"), seed.get("pdl")) if v]
                 trigger = rules.initial_sl_price(tp.entry, tp.sl_pct, tp.dir, lvls)
                 try:
-                    new_id = self.broker.place_sl(symbol, tp.dir, trigger, tp.qty)
+                    new_id = execution.place_sl(self.broker, symbol, tp.dir, trigger, tp.qty)
                 except Exception as e:
                     self.events.emit("ERROR", symbol, message=f"re-protect failed: {e!r}")
                     alert_dialog(f"{symbol} is UNPROTECTED and re-protect FAILED: {e}")
@@ -282,11 +282,11 @@ class MonitorLoop:
                 was = o.quantity
                 trigger = o.trigger_price or tp.sl_price
                 if self.broker.dry_run:
-                    self.broker.modify_sl(tp.sl_order_id, trigger, tp.qty)
+                    self.broker.modify_stop_order(tp.sl_order_id, trigger, tp.qty)
                     self.events.emit("SL_QTY_FIX", tp.symbol, was=was, now=tp.qty)
                     continue
                 try:
-                    self.broker.modify_sl(tp.sl_order_id, trigger, tp.qty)
+                    self.broker.modify_stop_order(tp.sl_order_id, trigger, tp.qty)
                 except Exception as e:
                     self.events.emit("SL_MODIFY_REJECTED", tp.symbol, reason=repr(e),
                                      wanted_qty=tp.qty, still_qty=was, context="qty_fix")

@@ -165,8 +165,8 @@ def test_sl_failure_leaves_a_seed_so_the_daemon_can_recover(tmp_path, monkeypatc
     kite, broker, events = _bits(tmp_path)
     kite.set_quote("RELIANCE", 1329.0)
 
-    real_place_sl = Broker.place_sl
-    monkeypatch.setattr(Broker, "place_sl",
+    real_place_stop_order = Broker.place_stop_order
+    monkeypatch.setattr(Broker, "place_stop_order",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("rejected")))
     t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)
 
@@ -175,7 +175,7 @@ def test_sl_failure_leaves_a_seed_so_the_daemon_can_recover(tmp_path, monkeypatc
     assert _events(tmp_path, "TRIGGER_SL_FAILED")
     seeds = json.loads(config.RISK_FILE.read_text())
     assert "RELIANCE" in seeds, "seed must exist so the monitor can place the missing SL"
-    monkeypatch.setattr(Broker, "place_sl", real_place_sl)
+    monkeypatch.setattr(Broker, "place_stop_order", real_place_stop_order)
 
 
 def test_entry_failure_places_no_stop_and_reports(tmp_path, monkeypatch):
@@ -183,7 +183,7 @@ def test_entry_failure_places_no_stop_and_reports(tmp_path, monkeypatch):
                         lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
     kite, broker, events = _bits(tmp_path)
     kite.set_quote("RELIANCE", 1329.0)
-    monkeypatch.setattr(Broker, "place_entry",
+    monkeypatch.setattr(Broker, "place_market_order",
                         lambda *a, **k: (_ for _ in ()).throw(RuntimeError("margin")))
     t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)
 

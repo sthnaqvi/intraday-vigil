@@ -5,7 +5,7 @@ import json
 import sys
 import time
 
-from .. import config, rules, state as state_mod
+from .. import config, execution, rules, state as state_mod
 from .. import triggers as triggers_mod
 from ..monitor import MonitorLoop
 from ..rules import Direction
@@ -111,7 +111,7 @@ def cmd_add(args) -> int:
             print("Aborted.")
             return 1
 
-    broker.place_entry(symbol, direction, args.qty)
+    execution.place_entry(broker, symbol, direction, args.qty)
 
     time.sleep(2)
     pos = _open_position(broker, symbol) or pos
@@ -155,12 +155,12 @@ def cmd_exit(args) -> int:
     sl_order = state_mod.find_sl_order(broker.orders(), symbol, direction)
     if sl_order is not None:
         try:
-            broker.cancel(sl_order.order_id)
+            broker.cancel_order(sl_order.order_id)
         except Exception as e:
             events.emit("WARNING", symbol, message=f"SL cancel failed before exit: {e}")
             print(f"WARNING: could not cancel the SL ({e}) — it may fill alongside the exit.",
                   file=sys.stderr)
-    broker.place_market_exit(symbol, direction, qty)
+    execution.place_market_exit(broker, symbol, direction, qty)
     events.emit("MANUAL_EXIT", symbol, qty=qty, direction=direction.value)
     time.sleep(2)
     still = _open_position(broker, symbol)
@@ -216,7 +216,7 @@ def cmd_protect(args) -> int:
             print("Aborted.")
             return 1
 
-    new_id = broker.place_sl(symbol, direction, trigger, qty)
+    new_id = execution.place_sl(broker, symbol, direction, trigger, qty)
     if tp is not None:
         tp.sl_order_id, tp.sl_price = new_id, trigger   # same trade: keep phase/breakeven
         session.save()
