@@ -60,9 +60,9 @@ NEAR_SL_PCT = 0.005       # position "near SL" when LTP within 0.5% of trigger
 KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries
 
 # When a tracked position's SL disappears (cancelled in the Kite app, pulled by the broker),
-# should the daemon re-place it automatically? Default False: on 2026-08-18 the user
-# cancelled a stop deliberately, and silently re-placing it would have overridden a decision
-# they had just made. Detection and a loud, repeating alert are unconditional either way;
+# should the daemon re-place it automatically? Default False: a user once cancelled a
+# stop deliberately, and silently re-placing it would have overridden a decision they had
+# just made. Detection and a loud, repeating alert are unconditional either way;
 # `vigil protect SYMBOL` re-places on demand.
 AUTO_REPROTECT = False
 
@@ -73,8 +73,8 @@ NO_NEW_ENTRIES_AFTER = time(14, 30)
 
 # Zerodha force-squares MIS at 15:10 (auction/closing rule). The daemon MUST finish before
 # that or the broker wins the race: we take its market fill instead of a controlled exit,
-# and SQUAREOFF_FILL bookkeeping races a position that is already flat. Corrected
-# 2026-08-18 — both were previously 15:10, giving the daemon zero head start.
+# and SQUAREOFF_FILL bookkeeping races a position that is already flat. Both used to be
+# 15:10, giving the daemon zero head start.
 BROKER_SQUAREOFF_AT = time(15, 10)
 SQUAREOFF_AT = time(15, 5)
 TIME_ALERTS = {
@@ -88,7 +88,7 @@ TIME_ALERTS = {
 # Zerodha rejects API market orders (MARKET, and SL-M modifies) without market
 # protection. Percentage cap on fill price away from the trigger. Keep this SMALL:
 # 5 was rejected by the exchange with '16448: Difference between limit price and
-# trigger price is beyond permissible range' (2026-08-18). 1 is accepted.
+# trigger price is beyond permissible range'. 1 is accepted.
 # Note: market protection converts an SL-M into an SL (limit) at trigger*(1+pct),
 # so a gap beyond that band can leave the stop unfilled.
 MARKET_PROTECTION_PCT = 1

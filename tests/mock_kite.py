@@ -14,8 +14,8 @@ class MockKite:
         self.fail_next_modify: Exception | None = None
         self.reject_order_on_failed_modify = True
         # Kite accepts the modify (HTTP 200) but the exchange rejects it, so the resting
-        # order is unchanged and carries a status_message. This is what actually happened
-        # on 2026-08-18 (error 16448) and it is invisible unless the order is re-read.
+        # order is unchanged and carries a status_message. This actually happens (error
+        # 16448) and it is invisible unless the order is re-read.
         self.silent_modify_rejections = 0
         self.silent_reject_message = (
             "16448 : Difference between limit price and trigger price is beyond permissible range"

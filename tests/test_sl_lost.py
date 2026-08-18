@@ -1,9 +1,9 @@
 """A tracked position whose SL disappears must be detected — every cycle.
 
-Found 2026-08-18: the user cancelled a resting SL in the Kite app. `reconcile()` only ever
-populated `unprotected` for FIRST-SEEN positions; the qty check skips non-pending orders;
-and `_replace_if_dead` only runs when a Phase 2/3 modify is attempted. So a Phase 1 position
-sat with 914 shares and no stop while status.json still printed "SL 1309.60".
+Found in live trading: the user cancelled a resting SL in the Kite app. `reconcile()` only
+ever populated `unprotected` for FIRST-SEEN positions; the qty check skips non-pending
+orders; and `_replace_if_dead` only runs when a Phase 2/3 modify is attempted. So a Phase 1
+position sat fully exposed with no stop while status.json still printed a stale SL price.
 
 Default behaviour is detect-and-alarm, NOT auto-replace: that cancel was deliberate, and
 silently re-placing it would have overridden a decision the user had just made.

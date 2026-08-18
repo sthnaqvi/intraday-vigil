@@ -275,7 +275,7 @@ class MonitorLoop:
         # exchange still reject it (e.g. "16448: difference between limit price and trigger
         # price is beyond permissible range"), which leaves the position part-unprotected.
         # Emitting SL_QTY_FIX without verifying once made the audit log claim a fix that
-        # never happened (2026-08-18, 610 of 914 shares left naked).
+        # never happened, leaving a majority of shares naked.
         for tp in self.session.positions.values():
             o = state_mod.order_by_id(orders, tp.sl_order_id)
             if o and o.get("status") in state_mod.PENDING_STATUSES and o.get("quantity") != tp.qty:
@@ -543,8 +543,8 @@ class MonitorLoop:
                 break
             except Exception as e:
                 self.failed_cycles += 1
-                # Always keep the traceback: a bare repr() sent us hunting for ten minutes
-                # on 2026-08-18 while the cycle was crash-looping and SLs went unmanaged.
+                # Always keep the traceback: a bare repr() once cost real time hunting for the
+                # cause while the cycle was crash-looping and SLs went unmanaged.
                 self.events.emit("ERROR", message=f"cycle failed: {e!r}",
                                  tb=_traceback.format_exc()[-2000:],
                                  consecutive_failures=self.failed_cycles)

@@ -227,8 +227,8 @@ def reconcile(
             # Adding to a position moves the entry VWAP, which changes R and therefore
             # every phase threshold. Re-read entry and the risk.json seed whenever qty
             # changes, not just on first discovery. (A partial exit leaves the entry-side
-            # VWAP untouched, so this is a no-op there.) Left stale on 2026-08-18, this
-            # reported a profitable HCLTECH short as a loss.
+            # VWAP untouched, so this is a no-op there.) Left stale once, this reported a
+            # profitable position as a loss.
             if new_qty != tp.qty:
                 old_entry, old_pct = tp.entry, tp.sl_pct
                 broker_entry = position_entry_price(pos_row)
@@ -255,7 +255,7 @@ def reconcile(
             # notice: `unprotected` was only populated for first-seen positions, the qty
             # check skips non-pending orders, and _replace_if_dead only runs when a Phase
             # 2/3 modify is attempted. A Phase 1 position could sit naked all session while
-            # status.json still displayed its old SL price. (Observed 2026-08-18.)
+            # status.json still displayed its old SL price.
             sl = order_by_id(orders, tp.sl_order_id)
             if sl is None or sl.get("status") not in PENDING_STATUSES:
                 if sl is None or sl.get("status") != "COMPLETE":

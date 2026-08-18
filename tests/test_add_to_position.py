@@ -1,10 +1,10 @@
-"""Regressions for the two bugs that cost real money on 2026-08-18.
+"""Regressions for two bugs that cost real money in live trading.
 
 1. Adding to an open position left `entry` and `sl_pct` frozen at their first-discovered
-   values, so R was ~11% wrong and the reported P&L had the wrong SIGN.
+   values, so R was meaningfully wrong and the reported P&L had the wrong SIGN.
 2. The SL qty fix emitted SL_QTY_FIX unconditionally. Kite accepted the modify, the
    exchange rejected it (error 16448), and the audit log recorded a fix that never
-   happened while 610 of 914 shares sat with no stop.
+   happened while most of the position sat with no stop.
 """
 import json
 
