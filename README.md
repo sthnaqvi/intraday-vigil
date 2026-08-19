@@ -83,9 +83,17 @@ post-session review. Install it with:
 ln -s "$(pwd)/skill/intraday-trader" ~/.claude/skills/intraday-trader
 ```
 
-(or copy it, if you'd rather not symlink). It talks to the daemon entirely through the
-`vigil` CLI — see the skill's own `SKILL.md` for its hard rules, chief among them: **the
-skill never modifies an SL order once the daemon owns it.**
+(or copy it, if you'd rather not symlink). Verify it actually took —
+`readlink ~/.claude/skills/intraday-trader` must print this repo's path; if you had an
+older copy of this skill installed already, `ln -s` silently refuses to overwrite it and
+you'll keep running stale instructions with no error telling you so.
+
+It talks to the daemon entirely through the `vigil` CLI — see the skill's own `SKILL.md`
+for its hard rules, chief among them: **the skill never modifies an SL order once the
+daemon owns it.** **Running `vigil start` does not invoke the skill or scan any stocks** —
+those only happen inside a conversation with Claude where you ask for them (e.g.
+`/intraday-trader start`). See [`docs/user-guide.md`](docs/user-guide.md) for the full
+day-in-the-life walkthrough of how the two halves work together.
 
 ## Tests
 
@@ -100,6 +108,8 @@ regression tests for the incidents in [`docs/incidents/`](docs/incidents/).
 
 ## Docs
 
+- [`docs/user-guide.md`](docs/user-guide.md) — **start here** — the whole system, both
+  halves, a full day walkthrough of who does what
 - [`docs/quickstart.md`](docs/quickstart.md) — first session, paper mode
 - [`docs/usage.md`](docs/usage.md) — every command
 - [`docs/safety.md`](docs/safety.md) — blast radius: what can place an order, what dry-run

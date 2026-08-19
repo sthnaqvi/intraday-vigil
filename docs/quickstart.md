@@ -143,6 +143,11 @@ pip install "vigil[kite]"
 
 ## Reference
 
+This page is `vigil` on its own — placing trades yourself, by hand. For how this fits
+together with the Claude skill that actually picks stocks and sizes trades for you, see
+**[`docs/user-guide.md`](user-guide.md)** — read it if `vigil start` didn't do what you
+expected it to.
+
 - [`docs/usage.md`](usage.md) — every command
 - [`docs/sl-rules.md`](sl-rules.md) — exactly what the daemon does and why
 - `skill/intraday-trader/` — the Claude skill for everything upstream of the daemon
