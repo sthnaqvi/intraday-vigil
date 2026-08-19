@@ -4,7 +4,8 @@ from __future__ import annotations
 import json
 from datetime import datetime
 
-from .. import clock, config, state as state_mod
+from .. import clock, config
+from .. import state as state_mod
 from .. import triggers as triggers_mod
 from ._shared import _daemon_pid, _live_broker
 

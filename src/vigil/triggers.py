@@ -20,12 +20,13 @@ from __future__ import annotations
 import json
 import os
 import threading
+from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
-from typing import Any, Callable
+from typing import Any
 
 from . import clock, config, execution, rules
-from .broker import Broker
 from .events import EventLog
+from .guard import GuardedBroker
 from .notify import alert_dialog, notify
 from .rules import Direction
 
@@ -105,7 +106,7 @@ def gate_block_reason(session: Any) -> str | None:
 
 # ---------- execution ----------
 
-def execute(trigger: Trigger, broker: Broker, events: EventLog, session: Any,
+def execute(trigger: Trigger, broker: GuardedBroker, events: EventLog, session: Any,
             ltp: float) -> bool:
     """Place the entry and its protective SL. Returns True on success.
 
@@ -166,8 +167,8 @@ def execute(trigger: Trigger, broker: Broker, events: EventLog, session: Any,
                 qty=trigger.qty, sl_price=sl_price, sl_pct=trigger.sl_pct,
                 entry_order_id=trigger.entry_order_id, sl_order_id=trigger.sl_order_id,
                 auto=trigger.auto)
-    notify(f"{trigger.symbol} ENTERED {trigger.direction} {trigger.qty} @ {fill}, SL {sl_price}",
-           sound=True)
+    notify(f"{trigger.symbol} ENTERED {trigger.direction} {trigger.qty} @ {fill}, "
+          f"SL {sl_price}", sound=True)
     return True
 
 
@@ -202,7 +203,7 @@ class TriggerEngine:
     no lock at all.
     """
 
-    def __init__(self, broker: Broker, events: EventLog, session: Any,
+    def __init__(self, broker: GuardedBroker, events: EventLog, session: Any,
                 on_fire: Callable[[Trigger], None] | None = None):
         self.broker = broker
         self.events = events

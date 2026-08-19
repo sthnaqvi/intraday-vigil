@@ -10,13 +10,13 @@ silently re-placing it would have overridden a decision the user had just made.
 """
 import json
 
+from tests.mock_kite import MockKite
+from tests.test_monitor import _now
 from vigil import config
 from vigil.broker import Broker
 from vigil.events import EventLog
 from vigil.monitor import MonitorLoop
 from vigil.state import SessionState
-from tests.mock_kite import MockKite
-from tests.test_monitor import _now
 
 
 def _loop(tmp_path, kite):
@@ -31,8 +31,8 @@ def _events(tmp_path, type_):
     p = next((tmp_path / "data").glob("events-*.jsonl"), None)
     if p is None:
         return []
-    return [json.loads(l) for l in p.read_text().splitlines()
-            if json.loads(l)["type"] == type_]
+    return [json.loads(line) for line in p.read_text().splitlines()
+            if json.loads(line)["type"] == type_]
 
 
 def _seed(kite, tmp_path):

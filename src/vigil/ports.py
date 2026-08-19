@@ -10,7 +10,7 @@ how to place a market order and a stop order, full stop.
 from __future__ import annotations
 
 from datetime import date
-from typing import Protocol
+from typing import Any, Protocol
 
 from .models import Order, Position, Quote
 
@@ -24,11 +24,12 @@ class BrokerClient(Protocol):
 
     def orders(self) -> list[Order]: ...
 
-    def margins(self) -> dict: ...
+    def margins(self) -> dict[str, Any]: ...
 
-    def instruments(self, exchange: str = "NSE") -> list[dict]: ...
+    def instruments(self, exchange: str = "NSE") -> list[dict[str, Any]]: ...
 
-    def historical_daily(self, instrument_token: int, from_date: date, to_date: date) -> list[dict]: ...
+    def historical_daily(self, instrument_token: int, from_date: date,
+                         to_date: date) -> list[dict[str, Any]]: ...
 
     # ---------- mutations ----------
 

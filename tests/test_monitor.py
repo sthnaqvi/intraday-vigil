@@ -2,11 +2,11 @@
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+from tests.mock_kite import MockKite
 from vigil.broker import Broker
 from vigil.events import EventLog
 from vigil.monitor import MonitorLoop
 from vigil.state import SessionState
-from tests.mock_kite import MockKite
 
 IST = ZoneInfo("Asia/Kolkata")
 

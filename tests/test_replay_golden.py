@@ -11,17 +11,17 @@ commit message — not an incidental side effect of moving code around.
 """
 import json
 
+from tests.mock_kite import MockKite
+from tests.test_monitor import _now
 from vigil.broker import Broker
 from vigil.events import EventLog
 from vigil.monitor import MonitorLoop
 from vigil.state import SessionState
-from tests.mock_kite import MockKite
-from tests.test_monitor import _now
 
 
 def _events(tmp_path):
     path = next((tmp_path / "data").glob("events-*.jsonl"))
-    return [json.loads(l) for l in path.read_text().splitlines()]
+    return [json.loads(line) for line in path.read_text().splitlines()]
 
 
 def _stream(tmp_path):
@@ -143,7 +143,7 @@ def test_golden_session_replay(tmp_path):
         f"got types: {[g[0] for g in got]}\n"
         f"expected types: {[e[0] for e in expected]}"
     )
-    for i, ((gt, gs, gd), (et, es, ed)) in enumerate(zip(got, expected)):
+    for i, ((gt, gs, gd), (et, es, ed)) in enumerate(zip(got, expected, strict=True)):
         assert gt == et, f"event {i}: type {gt!r} != expected {et!r}"
         assert gs == es, f"event {i} ({gt}): symbol {gs!r} != expected {es!r}"
         for k, v in ed.items():

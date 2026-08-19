@@ -10,15 +10,15 @@ import csv
 from datetime import timedelta
 
 from . import clock, config
-from .broker import Broker
 from .events import EventLog
+from .guard import GuardedBroker
 
 
 def _instruments_cache_path():
     return config.DATA_DIR / f"instruments-{clock.now_ist().date().isoformat()}.csv"
 
 
-def instrument_tokens(broker: Broker, symbols: list[str]) -> dict[str, int]:
+def instrument_tokens(broker: GuardedBroker, symbols: list[str]) -> dict[str, int]:
     """NSE tradingsymbol -> instrument_token, cached to a daily CSV."""
     path = _instruments_cache_path()
     mapping: dict[str, int] = {}
@@ -37,11 +37,13 @@ def instrument_tokens(broker: Broker, symbols: list[str]) -> dict[str, int]:
     return {s: mapping[s] for s in symbols if s in mapping}
 
 
-def fetch_pdh_pdl(broker: Broker, symbol: str, token: int, events: EventLog) -> tuple[float, float] | None:
+def fetch_pdh_pdl(broker: GuardedBroker, symbol: str, token: int,
+                  events: EventLog) -> tuple[float, float] | None:
     """Previous trading day's high/low from daily candles. None if unavailable."""
     today = clock.now_ist().date()
     try:
-        candles = broker.historical_daily(token, today - timedelta(days=7), today - timedelta(days=1))
+        candles = broker.historical_daily(token, today - timedelta(days=7),
+                                          today - timedelta(days=1))
         if candles:
             last = candles[-1]
             return float(last["high"]), float(last["low"])

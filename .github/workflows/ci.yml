@@ -1,0 +1,58 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e ".[lint]"
+      - run: ruff check src/ tests/
+      - name: mypy (core modules only — see pyproject.toml)
+        run: >
+          mypy src/vigil/models.py src/vigil/ports.py src/vigil/rules.py
+          src/vigil/market_profile.py src/vigil/state.py
+      - run: lint-imports
+
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e ".[kite,dev]"
+      # --disable-socket (pyproject.toml addopts) makes this structurally incapable of
+      # reaching a broker — the suite runs against MockKite/PaperAdapter only, never a
+      # real network call, on every PR from every contributor.
+      - run: pytest tests/ -v --cov=vigil --cov-report=term-missing
+
+  build-and-smoke-test:
+    runs-on: ubuntu-latest
+    needs: [lint, test]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install build
+      - run: python -m build
+      - name: install the built wheel into a clean venv and smoke-test it
+        run: |
+          python -m venv /tmp/smoke-venv
+          /tmp/smoke-venv/bin/pip install dist/*.whl
+          /tmp/smoke-venv/bin/vigil --help
+          /tmp/smoke-venv/bin/vigil paths --json
+          # Proves package data (web_static/, markets data) actually shipped in the
+          # wheel, not just in the source tree — a clean venv has nothing else to
+          # fall back on.

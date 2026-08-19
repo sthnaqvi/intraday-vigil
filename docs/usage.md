@@ -1,0 +1,133 @@
+# Usage
+
+Every `vigil` subcommand. `vigil --help` and `vigil <command> --help` are the live source
+of truth — `tests/test_usage_docs.py` asserts every subcommand name appears somewhere on
+this page, so the two can't drift apart the way an earlier version of this project's docs
+once did (documenting under half its actual commands).
+
+## Daily flow
+
+```bash
+vigil start           # login if needed + background daemon; idempotent, safe to repeat
+vigil status           # session dashboard
+vigil stop             # halt the daemon (broker SLs stay active)
+```
+
+Place trades however you like — through the Claude skill, manually in the broker's own
+app, or with the commands below. The daemon auto-discovers any open position within one
+cycle and starts managing its stop. First sessions: run with `--dry-run` and diff the
+logged `DRY_RUN_INTENT` events against what you'd expect (see `docs/safety.md`).
+
+## Daemon lifecycle
+
+| Command | What it does |
+|---|---|
+| `vigil start [--dry-run] [--force] [--paste] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
+| `vigil stop` | Stop the daemon (broker SLs remain active) |
+| `vigil login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work |
+| `vigil monitor [--dry-run] [--force] [--allow-silent]` | The loop in the foreground (what `start` backgrounds) |
+| `vigil paths [--json]` | Where this install keeps its state (VIGIL_HOME/XDG resolution) |
+
+`--allow-silent` lets a live daemon run without a detected desktop notifier. Without it, a
+live daemon with no working notifier **refuses to start** — you'd otherwise get zero
+alerts for SL hits, unprotected positions, or token expiry.
+
+## Reading state
+
+| Command | What it does |
+|---|---|
+| `vigil positions` | Raw broker view: open MIS positions + the SL order guarding each |
+| `vigil status [--json]` | Session dashboard; `--json` prints the raw snapshot |
+| `vigil quote SYM [SYM...]` | LTP + OHLC without the MCP session |
+| `vigil triggers` | List armed / fired triggers |
+
+## Placing and managing orders
+
+| Command | What it does |
+|---|---|
+| `vigil enter SYM --side long\|short --qty N --sl-pct X [--pdh X --pdl Y] [--yes]` | Open a position + SL now — no MCP session needed |
+| `vigil arm SYM --side ... --above/--below PRICE --qty N --sl-pct X [--auto]` | Arm a price trigger watched over the price feed |
+| `vigil add SYM --qty N` | Scale into an open position (rewrites the risk seed) |
+| `vigil add-position SYM --sl-pct 1.0 [--pdh X --pdl Y]` | Seed risk info for a symbol (writes `risk.json`), no order placed |
+| `vigil protect SYM [--trigger P] [--force]` | Re-place a missing SL on an open position, preserving phase history |
+| `vigil exit SYM [--yes]` | Exit ONE symbol: cancel its SL, then market-exit |
+| `vigil squareoff [--yes]` | Cancel all SLs + market-exit everything now |
+| `vigil disarm [SYM]` | Cancel armed triggers (all, or one symbol) |
+
+`enter`, `add`, `arm`, and `protect` all refuse `sl_pct > 1.5%` and enforce the entry gate
+(kill switch, `no_new_entries`, the hard cutoff) — override the gate only with
+`--override-gate`, and only when you mean it.
+
+## Dashboard and the Claude bridge
+
+| Command | What it does |
+|---|---|
+| `vigil web [--port 8765]` | Local dashboard — **can place orders** behind typed confirmation; binds to `127.0.0.1` only, always |
+| `vigil ask [question] [--pending] [--answer ID --text ...]` | Ask Claude (runs the CLI if present, else queues) |
+
+See `docs/safety.md` for exactly what the dashboard's confirmation flow guarantees.
+
+## The state contract
+
+| File (under `vigil paths --json` → `data_dir`) | Writer | Reader | Content |
+|---|---|---|---|
+| `risk.json` | skill or `vigil add-position`/`enter`/`arm` | daemon | `{"SYMBOL": {"sl_pct": 0.01, "pdh": 4205, "pdl": 4080}}` |
+| `status.json` | daemon, every cycle | skill / `vigil status` | Full session snapshot: positions, phases, P&L, flags |
+| `events-<date>.jsonl` | daemon | skill's RCA mode, `vigil ask` context | Append-only audit log of every decision |
+| `triggers.json` | `vigil arm`/`disarm` | daemon | Armed trigger state |
+
+Without a `risk.json` seed the daemon still works: it derives `sl_pct` from the untouched
+SL order (logged as a warning). A position with **no SL at all** and no seed triggers a
+modal alert — seed it with `vigil add-position` and the daemon places the SL itself on the
+next cycle.
+
+## Advanced
+
+**Restart recovery.** Kill the daemon, restart it, crash mid-modify — all safe. Broker
+state (positions, orders, triggers) is re-read as the source of truth every cycle;
+`session-<date>.json` restores `sl_pct`/phase/the realised-R ledger; a breakeven SL is even
+recognized from `trigger == entry` if the session file is lost.
+
+**Token expiry mid-session** (Kite). The daemon never crashes on it: you get a modal alert,
+it retries every 60s, and the resting SLs keep protecting you. Run `vigil login` in
+another terminal; the daemon picks up the new token on its own process restart — or just
+`vigil stop && vigil start`.
+
+**Event log anatomy.** Each line of `events-<date>.jsonl`: `{"ts", "type", "symbol",
+"data"}`. Key types: `POSITION_DISCOVERED`, `PHASE_CHANGE`, `SL_MODIFY` (with
+`from_trigger`/`to_trigger`/`reason`/`guard_applied`), `SL_MODIFY_VERIFIED`,
+`SL_MODIFY_REJECTED`, `SL_REPLACED` (dead order re-placed), `SL_QTY_FIX`, `SL_LOST`,
+`SL_HIT`, `ORPHAN_SL_CANCELLED`, `TIME_ALERT`, `SQUAREOFF_*`, `KILL_SWITCH`,
+`TRIGGER_ARMED`/`HIT`/`FIRED`/`BLOCKED`, `TICKER_CONNECTED`/`CLOSED`/`ERROR`,
+`DRY_RUN_INTENT`, `WARNING`, `ERROR`. Grep example:
+
+```bash
+grep SL_MODIFY "$(vigil paths --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["data_dir"])')"/events-$(date +%F).jsonl \
+  | python3 -m json.tool --json-lines
+```
+
+**The audit trail.** `logs/actions.jsonl` (every CLI invocation or dashboard click, with
+argv, exit code, duration) and `logs/api.jsonl` (every broker call — mutations verbatim,
+reads summarised) both carry a `trace` id shared with the events file, so one action can be
+followed end to end. See `docs/architecture.md` for how this differs from the event log.
+
+**PDH/PDL sources**, in priority order: a `risk.json` seed → the broker's historical-data
+endpoint (may be a paid add-on on some Kite plans; a failure just logs a warning) → today's
+running high/low only.
+
+**Logs.** Human-readable: `logs/algo.log` (rotating; the filename is an operational choice
+kept as-is through the rename, not a leftover) and `logs/daemon.out` (the backgrounded
+daemon's console). Structured: the events JSONL and the audit trail above.
+
+## Troubleshooting
+
+| Symptom | Fix |
+|---|---|
+| `auth: No valid token for today` | `vigil login` (Kite tokens die ~6 AM IST daily) |
+| Login browser tab errors after credentials | Redirect URL at developers.kite.trade must exactly match `LOGIN_LISTEN_PORT`/`LOGIN_REDIRECT_PATH` in `config.py`; or use `vigil login --paste` |
+| Login timeout (15 min) | Rerun; check nothing else owns the listen port (`lsof -iTCP:3100`) |
+| `vigil status` says STALE | Daemon died or was never started — `vigil start` (check `logs/daemon.out`) |
+| "SL qty mismatch fixed" notifications | Working as intended — that's a documented broker quirk being caught, see `docs/incidents/verification-gaps.md` |
+| `historical_data unavailable` warning | Some API keys lack the historical-data add-on; seed `pdh`/`pdl` via `add-position` instead |
+| Daemon refuses to run | Market closed — `--force` to override (e.g. testing outside session hours) |
+| `kiteconnect is not installed` | You're on the base install or `vigil[paper]` — `pip install "vigil[kite]"` for live Kite trading |

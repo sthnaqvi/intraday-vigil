@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import time as _time
 from datetime import date
-from typing import Any
 
 from . import audit, config
 from .events import EventLog

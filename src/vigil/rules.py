@@ -125,7 +125,8 @@ def trail_decision(
     return ModifyIntent(order_id, new_sl, quantity, "trail_2x_slpct", applied)
 
 
-def initial_sl_price(entry: float, sl_pct: float, direction: Direction, levels: list[float]) -> float:
+def initial_sl_price(entry: float, sl_pct: float, direction: Direction,
+                     levels: list[float]) -> float:
     """Fresh SL placement (discovery of an unprotected position, or reject->replace)."""
     raw = entry * (1 - sl_pct) if direction == Direction.LONG else entry * (1 + sl_pct)
     guarded, _ = apply_stop_hunt_guard(raw, levels, direction)

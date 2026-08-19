@@ -7,9 +7,11 @@ from __future__ import annotations
 
 import os
 
-from .. import auth, config, state as state_mod
+from .. import auth, config
+from .. import state as state_mod
 from ..broker import Broker
 from ..events import EventLog
+from ..models import Position
 
 
 def _live_broker(dry_run: bool = False) -> tuple[Broker, EventLog]:
@@ -43,5 +45,5 @@ def _as_fraction(sl_pct: float) -> float:
     return sl_pct if sl_pct <= 0.2 else sl_pct / 100.0
 
 
-def _open_position(broker: Broker, symbol: str) -> dict | None:
+def _open_position(broker: Broker, symbol: str) -> Position | None:
     return state_mod.open_mis_positions(broker.positions_day()).get(symbol)

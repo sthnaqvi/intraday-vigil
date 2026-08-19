@@ -8,12 +8,12 @@
 """
 import json
 
+from tests.mock_kite import MockKite
+from tests.test_monitor import _now
 from vigil.broker import Broker
 from vigil.events import EventLog
 from vigil.monitor import MonitorLoop
 from vigil.state import SessionState
-from tests.mock_kite import MockKite
-from tests.test_monitor import _now
 
 
 def _loop(tmp_path, kite, now=(11, 30)):
@@ -27,8 +27,8 @@ def _events(tmp_path, type_):
     path = next((tmp_path / "data").glob("events-*.jsonl"), None)
     if path is None:
         return []
-    return [json.loads(l) for l in path.read_text().splitlines()
-            if json.loads(l)["type"] == type_]
+    return [json.loads(line) for line in path.read_text().splitlines()
+            if json.loads(line)["type"] == type_]
 
 
 def _seed_short(kite, qty=304, sell_price=1296.6, sl=1309.6):

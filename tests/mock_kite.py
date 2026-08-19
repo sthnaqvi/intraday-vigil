@@ -18,7 +18,8 @@ class MockKite:
         # 16448) and it is invisible unless the order is re-read.
         self.silent_modify_rejections = 0
         self.silent_reject_message = (
-            "16448 : Difference between limit price and trigger price is beyond permissible range"
+            "16448 : Difference between limit price and trigger price is beyond "
+            "permissible range"
         )
 
     # ---------- scripting helpers ----------

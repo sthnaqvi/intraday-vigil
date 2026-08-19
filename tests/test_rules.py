@@ -12,7 +12,8 @@ IST = ZoneInfo("Asia/Kolkata")
 
 # ---------- phase boundaries ----------
 
-@pytest.mark.parametrize("pr,phase", [(0.0, 1), (0.99, 1), (1.0, 2), (1.49, 2), (1.5, 3), (3.2, 3)])
+@pytest.mark.parametrize("pr,phase",
+                         [(0.0, 1), (0.99, 1), (1.0, 2), (1.49, 2), (1.5, 3), (3.2, 3)])
 def test_target_phase_boundaries(pr, phase):
     assert rules.target_phase(pr) == phase
 
@@ -30,7 +31,7 @@ def test_profit_r_both_directions():
 def test_tick_rounding_favor():
     assert rules.round_to_tick_favor(4082.715, Direction.LONG) == 4082.70   # floor
     assert rules.round_to_tick_favor(4082.715, Direction.SHORT) == 4082.75  # ceil
-    assert rules.round_to_tick_favor(100.05, Direction.LONG) == 100.05      # exact tick unchanged
+    assert rules.round_to_tick_favor(100.05, Direction.LONG) == 100.05      # exact tick
     assert rules.round_to_tick_favor(100.05, Direction.SHORT) == 100.05
 
 
@@ -77,7 +78,7 @@ def test_indigo_regression_manual_sl_in_stop_hunt_zone_gets_pushed():
 # ---------- canonical regression: DRREDDY (2x sl_pct trail, never fixed 5%) ----------
 
 def test_drreddy_regression_2x_trail_fires_fixed_5pct_does_not():
-    entry, sl_pct = 1271.0, 0.0102
+    sl_pct = 0.0102
     trail_pct = 2 * sl_pct  # 2.04%
     ltp, be_sl = 1303.8, 1271.0  # peak +2.16R, SL at breakeven
 

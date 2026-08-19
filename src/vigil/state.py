@@ -10,6 +10,7 @@ import json
 import os
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any
 
 from . import clock, config, rules
 from .models import Order, Position
@@ -52,18 +53,18 @@ class TrackedPosition:
 class SessionState:
     date: str
     positions: dict[str, TrackedPosition] = field(default_factory=dict)
-    closed: list[dict] = field(default_factory=list)
+    closed: list[dict[str, Any]] = field(default_factory=list)
     fired: list[str] = field(default_factory=list)
     kill_switch: bool = False
     squareoff_done: bool = False
 
     @property
     def realized_r_today(self) -> float:
-        return round(sum(c["realized_r"] for c in self.closed), 3)
+        return round(float(sum(c["realized_r"] for c in self.closed)), 3)
 
     @property
     def realized_pnl_today(self) -> float:
-        return round(sum(c["realized_pnl"] for c in self.closed), 2)
+        return round(float(sum(c["realized_pnl"] for c in self.closed)), 2)
 
     # ---------- persistence ----------
 
@@ -77,7 +78,7 @@ class SessionState:
         self._path(self.date).write_text(json.dumps(data, indent=2))
 
     @classmethod
-    def load_or_create(cls) -> "SessionState":
+    def load_or_create(cls) -> SessionState:
         today = clock.now_ist().date().isoformat()
         path = cls._path(today)
         if path.exists():
@@ -87,19 +88,20 @@ class SessionState:
         return cls(date=today)
 
 
-def load_risk_seeds() -> dict[str, dict]:
+def load_risk_seeds() -> dict[str, dict[str, Any]]:
     """data/risk.json — written by `vigil enter` / `vigil arm` / `vigil add`, or by the
     Claude skill for MCP-placed entries:
     {"INDIGO": {"sl_pct": 0.01, "pdh": 4205.0, "pdl": 4080.0}, ...}"""
     if config.RISK_FILE.exists():
         try:
-            return json.loads(config.RISK_FILE.read_text())
+            seeds: dict[str, dict[str, Any]] = json.loads(config.RISK_FILE.read_text())
+            return seeds
         except json.JSONDecodeError:
             return {}
     return {}
 
 
-def save_risk_seeds(seeds: dict[str, dict]) -> None:
+def save_risk_seeds(seeds: dict[str, dict[str, Any]]) -> None:
     """Atomic write. Callers must merge — never clobber another symbol's seed."""
     config.DATA_DIR.mkdir(parents=True, exist_ok=True)
     tmp = config.RISK_FILE.with_suffix(".tmp")
@@ -151,21 +153,21 @@ def order_by_id(orders: list[Order], order_id: str) -> Order | None:
 @dataclass
 class ReconcileReport:
     new_tracked: list[str] = field(default_factory=list)
-    exited: list[dict] = field(default_factory=list)
+    exited: list[dict[str, Any]] = field(default_factory=list)
     orphan_sl_cancelled: list[str] = field(default_factory=list)
     unprotected: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
-    refreshed: list[dict] = field(default_factory=list)
+    refreshed: list[dict[str, Any]] = field(default_factory=list)
     # Tracked positions whose SL order is no longer resting at the exchange. Distinct from
     # `unprotected`, which only ever covered positions seen for the FIRST time.
-    lost_sl: list[dict] = field(default_factory=list)
+    lost_sl: list[dict[str, Any]] = field(default_factory=list)
 
 
 def reconcile(
     state: SessionState,
     positions_day: list[Position],
     orders: list[Order],
-    seeds: dict[str, dict],
+    seeds: dict[str, dict[str, Any]],
 ) -> ReconcileReport:
     """Diff broker truth against tracked state. Pure bookkeeping — the caller
     (monitor) executes any resulting broker actions (orphan cancels, fresh SLs)."""

@@ -18,12 +18,15 @@ import threading
 import webbrowser
 from datetime import datetime, time
 from http.server import BaseHTTPRequestHandler, HTTPServer
+from typing import TYPE_CHECKING
 from urllib.parse import parse_qs, urlparse
 
 from dotenv import dotenv_values
-from kiteconnect import KiteConnect
 
 from . import clock, config
+
+if TYPE_CHECKING:
+    from kiteconnect import KiteConnect
 
 
 class AuthError(Exception):
@@ -89,9 +92,23 @@ class _CallbackHandler(BaseHTTPRequestHandler):
         pass
 
 
+def _kite_connect_cls() -> type:
+    """kiteconnect is an optional dependency (`pip install vigil[kite]`) — core, and paper
+    mode, must import cleanly with it absent. Only auth.py and kite_adapter.py ever import
+    it, and only inside a function body, never at module level."""
+    try:
+        from kiteconnect import KiteConnect
+    except ImportError as e:
+        raise AuthError(
+            "kiteconnect is not installed — run: pip install \"vigil[kite]\""
+        ) from e
+    return KiteConnect
+
+
 def login(paste: bool = False, force: bool = False) -> str:
     """Interactive daily login. Fast-path: if today's token is still valid,
     returns it without touching the browser (unless force=True)."""
+    KiteConnect = _kite_connect_cls()  # noqa: N806 — mirrors the imported class's own name
     api_key, api_secret = _credentials()
     if not force:
         token = _load_token(api_key)
@@ -115,7 +132,8 @@ def login(paste: bool = False, force: bool = False) -> str:
         server = HTTPServer(("127.0.0.1", config.LOGIN_LISTEN_PORT), _CallbackHandler)
         thread = threading.Thread(target=server.handle_request, daemon=True)
         thread.start()
-        print(f"Opening browser for Kite login (listening on 127.0.0.1:{config.LOGIN_LISTEN_PORT})...")
+        print(f"Opening browser for Kite login "
+              f"(listening on 127.0.0.1:{config.LOGIN_LISTEN_PORT})...")
         webbrowser.open(url)
         thread.join(timeout=900)
         server.server_close()
@@ -136,6 +154,7 @@ def login(paste: bool = False, force: bool = False) -> str:
 
 def get_kite() -> KiteConnect:
     """Authenticated client from the stored token; verifies with a profile() ping."""
+    KiteConnect = _kite_connect_cls()  # noqa: N806 — mirrors the imported class's own name
     api_key, _ = _credentials()
     token = _load_token(api_key)
     if not token:

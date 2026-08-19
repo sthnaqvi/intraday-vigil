@@ -12,12 +12,13 @@ from __future__ import annotations
 import os
 import time as _time
 import traceback as _traceback
-from typing import Callable
+from collections.abc import Callable
 
-from . import clock, config, execution, levels, rules, state as state_mod
-from .broker import Broker, TokenException
+from . import clock, config, execution, levels, rules
+from . import state as state_mod
 from .events import EventLog, logger
 from .feed import KiteTickerFeed, PollingFeed
+from .guard import GuardedBroker, TokenException
 from .models import Quote
 from .notify import alert_dialog, notify
 from .rules import Direction, ModifyIntent
@@ -28,7 +29,7 @@ from .triggers import TriggerEngine
 class MonitorLoop:
     def __init__(
         self,
-        broker: Broker,
+        broker: GuardedBroker,
         events: EventLog,
         session: SessionState,
         now_fn: Callable = clock.now_ist,
@@ -55,7 +56,8 @@ class MonitorLoop:
             try:
                 self._tokens.update(levels.instrument_tokens(self.broker, [tp.symbol]))
             except Exception as e:
-                self.events.emit("WARNING", tp.symbol, message=f"instrument token lookup failed: {e}")
+                self.events.emit("WARNING", tp.symbol,
+                                message=f"instrument token lookup failed: {e}")
                 return
         token = self._tokens.get(tp.symbol)
         if token:
@@ -100,7 +102,8 @@ class MonitorLoop:
                 and abs((o.trigger_price or 0) - intent.trigger_price) < config.NSE_TICK
                 and o.quantity == intent.quantity
             )
-            if o is not None and o.status not in state_mod.PENDING_STATUSES and o.status != "COMPLETE":
+            if (o is not None and o.status not in state_mod.PENDING_STATUSES
+                    and o.status != "COMPLETE"):
                 self._replace_if_dead(tp, intent)
                 return
 
@@ -314,7 +317,8 @@ class MonitorLoop:
                 except Exception as e:
                     self.events.emit("SL_MODIFY_REJECTED", tp.symbol, reason=repr(e),
                                      wanted_qty=tp.qty, still_qty=was, context="qty_fix")
-                    alert_dialog(f"{tp.symbol}: SL qty fix FAILED ({was} of {tp.qty} protected). {e}")
+                    alert_dialog(
+                        f"{tp.symbol}: SL qty fix FAILED ({was} of {tp.qty} protected). {e}")
                     continue
                 after = state_mod.order_by_id(self.broker.orders(), tp.sl_order_id)
                 if after is not None and after.quantity == tp.qty \
@@ -359,7 +363,8 @@ class MonitorLoop:
                 new_phase = max(tp.phase, rules.target_phase(pr))
                 if new_phase != tp.phase:
                     tp.phase = new_phase
-                    self.events.emit("PHASE_CHANGE", tp.symbol, phase=new_phase, profit_r=round(pr, 2))
+                    self.events.emit("PHASE_CHANGE", tp.symbol, phase=new_phase,
+                                    profit_r=round(pr, 2))
                     notify(f"{tp.symbol} -> Phase {new_phase} ({pr:+.2f}R)")
 
                 lvls = self._levels_for(tp, q)

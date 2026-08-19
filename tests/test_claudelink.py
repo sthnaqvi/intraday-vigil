@@ -1,5 +1,4 @@
 """The Claude bridge: queue semantics, and the CLI path when a binary exists."""
-import json
 
 import pytest
 

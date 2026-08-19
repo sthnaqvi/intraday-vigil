@@ -9,10 +9,11 @@ from zoneinfo import ZoneInfo
 
 import pytest
 
-from vigil import config, triggers as T
+from tests.mock_kite import MockKite
+from vigil import config
+from vigil import triggers as T
 from vigil.broker import Broker
 from vigil.events import EventLog
-from tests.mock_kite import MockKite
 
 IST = ZoneInfo("Asia/Kolkata")
 
@@ -41,8 +42,8 @@ def _events(tmp_path, type_):
     p = next((tmp_path / "data").glob("events-*.jsonl"), None)
     if p is None:
         return []
-    return [json.loads(l) for l in p.read_text().splitlines()
-            if json.loads(l)["type"] == type_]
+    return [json.loads(line) for line in p.read_text().splitlines()
+            if json.loads(line)["type"] == type_]
 
 
 # ---------- crossing ----------
@@ -92,7 +93,8 @@ def test_gate_blocks_after_1430(monkeypatch):
 def test_gate_blocks_on_kill_switch(monkeypatch):
     monkeypatch.setattr(T.clock, "now_ist",
                         lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
-    assert "kill switch" in T.gate_block_reason(FakeSession(kill_switch=True, realized_r_today=-2.1))
+    session = FakeSession(kill_switch=True, realized_r_today=-2.1)
+    assert "kill switch" in T.gate_block_reason(session)
 
 
 def test_gate_allows_in_window(monkeypatch):

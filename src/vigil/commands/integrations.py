@@ -27,7 +27,7 @@ def cmd_ask(args) -> int:
             print(f"Q: {r['question']}")
             if r.get("context", {}).get("positions"):
                 print(f"   context: {json.dumps(r['context']['positions'])[:200]}")
-        print(f"\nAnswer with: vigil ask --answer <id> --text \"...\"")
+        print("\nAnswer with: vigil ask --answer <id> --text \"...\"")
         return 0
 
     if args.answer:

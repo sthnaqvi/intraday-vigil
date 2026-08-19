@@ -5,7 +5,8 @@ import json
 import sys
 import time
 
-from .. import config, execution, rules, state as state_mod
+from .. import config, execution, rules
+from .. import state as state_mod
 from .. import triggers as triggers_mod
 from ..monitor import MonitorLoop
 from ..rules import Direction

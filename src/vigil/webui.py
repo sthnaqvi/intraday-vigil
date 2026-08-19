@@ -18,8 +18,8 @@ import json
 import os
 import re
 import subprocess
-import time
 import sys
+import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
@@ -64,7 +64,8 @@ LOG_SOURCES = {
     "api.jsonl":   lambda: config.LOGS_DIR / "api.jsonl",
     "web.jsonl":   lambda: config.LOGS_DIR / "web.jsonl",
     "daemon.out":  lambda: config.LOGS_DIR / "daemon.out",
-    "events":      lambda: config.DATA_DIR / f"events-{clock.now_ist().date().isoformat()}.jsonl",
+    "events":      lambda: (config.DATA_DIR
+                            / f"events-{clock.now_ist().date().isoformat()}.jsonl"),
     "status.json": lambda: config.STATUS_FILE,
     "risk.json":   lambda: config.RISK_FILE,
     "triggers.json": lambda: config.DATA_DIR / "triggers.json",
@@ -244,7 +245,10 @@ def run_command(cmd: str, params: dict, confirm: str | None) -> dict:
     try:
         # No cwd pin: `-m vigil` resolves from any working directory now that the
         # package is installed — see the matching comment in cli.py's cmd_start.
-        proc = subprocess.run(argv, capture_output=True,
+        # argv is built by _build_argv from a whitelisted command + typed params, never
+        # from raw request input, and this is a list exec (no shell=True) — S603 is a
+        # generic "dynamic subprocess" flag, not a finding specific to this call site.
+        proc = subprocess.run(argv, capture_output=True,  # noqa: S603
                               text=True, timeout=120,
                               env=audit.child_env(trace, "web"))
     except subprocess.TimeoutExpired:
@@ -327,7 +331,7 @@ class Handler(BaseHTTPRequestHandler):
             if str(getattr(self, "path", "")).startswith(self.POLLING):
                 return
             audit.web(line=fmt % a, client=self.client_address[0])
-        except Exception:
+        except Exception:  # noqa: S110 — logging a request must never break serving it
             pass
 
     def handle_one_request(self):

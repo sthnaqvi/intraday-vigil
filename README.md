@@ -1,120 +1,115 @@
 # vigil
 
-Deterministic SL-lifecycle daemon for Zerodha Kite intraday (MIS) positions.
-Replaces the AI-driven monitor loop of the `intraday-trader` Claude skill: the
-morning workflow (macro theme, sectors, entries) stays human+Claude; once
-positions and SL orders exist at the broker, this daemon owns the SL lifecycle.
+**bell-to-bell intraday trading, watched.**
 
-Spec source of truth: `~/.claude/skills/intraday-trader/references/sl-rules.md`.
+A deterministic stop-loss-lifecycle daemon for intraday (MIS-style) equity positions,
+paired with a Claude Code skill for the parts that need judgment (sector selection, entry
+timing, post-session review). The daemon owns everything mechanical once a position and
+its stop exist at the broker: breakeven moves, mechanical trailing, quantity verification,
+time-based alerts, and a scheduled square-off — every cycle, deterministically, with every
+action verified against the broker before the daemon believes it happened.
 
-## What it does, every cycle (150s / 90s near SL)
+> ⚠️ **This places real orders with real money when run against a live broker.** Read
+> [`docs/safety.md`](docs/safety.md) before you point it at a funded account. Nothing here
+> is investment advice — it's an execution tool, not a strategy. Start in
+> [paper mode](docs/quickstart.md), with no broker account and no money at risk, and read
+> the [known incidents](docs/incidents/) this project's own hard rules came from.
 
-1. Reconciles broker truth (positions + orders) against tracked state — new
-   positions are auto-discovered, exits are detected via SL order status
-   `COMPLETE` (works for profitable trail exits too).
-2. Verifies every SL order's quantity == position quantity (Kite silently
-   defaults to qty=1 on modify); fixes mismatches immediately.
-3. Runs the phase lifecycle:
+## What it does, every cycle
+
+1. Reconciles broker truth (positions + orders) against tracked state — new positions are
+   auto-discovered, exits are detected via SL order status, including profitable trail
+   exits.
+2. Verifies every SL order's quantity matches the position's quantity (a documented broker
+   quirk silently defaults an omitted quantity to 1 — see
+   [`docs/incidents/verification-gaps.md`](docs/incidents/verification-gaps.md)); fixes
+   mismatches immediately, and re-verifies the fix landed.
+3. Runs the three-phase SL lifecycle — full spec in [`docs/sl-rules.md`](docs/sl-rules.md):
    - **Phase 1** (< +1R): SL untouched.
    - **Phase 2** (≥ +1R): one-time move to breakeven.
-   - **Phase 3** (≥ +1.5R): mechanical trail at 2×sl_pct from LTP, ratchet-only,
-     0.5% min-move between successive trails (first trail after breakeven exempt).
-   - Stop-hunt guard on every placement: never within 0.3% of PDH/PDL/day-H/L.
-4. Time rules (IST): alerts 14:00 / 14:30 / 14:45, `no_new_entries` after 14:30,
-   full square-off at **15:05** (deliberately ahead of Zerodha's own **15:10**
-   MIS force-square-off — the daemon must finish before the broker does, or it
-   takes the broker's market fill instead of a controlled exit).
-5. Kill switch: day realised R ≤ −2.0 → `kill_switch` flag (no new entries).
-6. Writes `data/status.json` (snapshot) and `data/events-<date>.jsonl` (audit
-   log for post-session RCA), and sends a desktop notification on every
-   transition (macOS via osascript, Linux via notify-send, otherwise a
-   terminal fallback — see `vigil start --allow-silent` if neither is
-   available and you accept running without alerts).
+   - **Phase 3** (≥ +1.5R): mechanical trail at 2×`sl_pct` from LTP, ratchet-only.
+   - Stop-hunt guard on every placement: never within 0.3% of the prior day's high/low or a
+     clear intraday swing.
+4. Time rules: scheduled alerts, a no-new-entries cutoff, and a full square-off timed to
+   finish *before* the broker's own force-square rule — enforced at construction time, not
+   just by convention (`src/vigil/market_profile.py`).
+5. Kill switch: a configurable daily-loss threshold sets a flag that blocks new entries.
+6. Writes a session snapshot and an append-only audit log every cycle, and sends a desktop
+   notification on every transition that matters (a live daemon **refuses to start** with
+   no working notifier, unless you explicitly accept running silent).
 
-Safety: modify results are verified before state advances; a rejected/dead SL
-order with the position still open is re-placed immediately; a cycle crash
-never kills the process; killing the daemon is safe (broker SLs keep resting).
+Safety properties: every SL modify is verified against a broker re-read before state
+advances, never assumed from the API call not raising; a rejected or dead SL order with the
+position still open is re-placed immediately; a cycle crash never kills the process; killing
+the daemon is always safe — resting stops keep protecting you at the exchange.
 
-## Setup (once)
+## Install
 
+```bash
+pip install "vigil[kite]"     # Zerodha Kite — needs a Kite Connect API key
+# or
+pip install "vigil[paper]"    # paper trading — no broker account needed
 ```
-/opt/homebrew/bin/python3.13 -m venv .venv
-.venv/bin/pip install -r requirements.txt
-```
 
-`.env` needs `KITE_API_KEY` and `KITE_API_SECRET` (chmod 600).
-
-At https://developers.kite.trade set the app's **redirect URL** to
-`http://localhost:3100/kite-token-exchange` (or always use `login --paste`).
+Both give you the `vigil` command. See [`docs/quickstart.md`](docs/quickstart.md) for a
+first session end to end, starting in paper mode.
 
 ## Daily use
 
-**Full guide: [docs/USAGE.md](docs/USAGE.md)** — login to advanced, one place.
-
-```
-.venv/bin/python -m vigil start          # the whole morning in one command:
-                                        #   login (skipped if token valid) + background daemon
-.venv/bin/python -m vigil status         # session dashboard
-.venv/bin/python -m vigil stop           # halt daemon (broker SLs stay active)
+```bash
+vigil start           # the whole session in one command: login if needed + background daemon
+vigil status           # session dashboard
+vigil stop             # halt the daemon (broker SLs stay active)
 ```
 
-All 18 subcommands (`vigil --help` is the live source of truth; this table is
-generated from it, not hand-maintained):
+Full command reference, all 20 subcommands: [`docs/usage.md`](docs/usage.md).
 
-| Command | What it does |
-|---|---|
-| `start` | Morning one-shot: login if needed + run daemon in background |
-| `stop` | Stop the background daemon (broker SLs stay active) |
-| `login` | Daily Kite login (skips browser if token still valid) |
-| `positions` | Live MIS positions + their SL orders |
-| `status` | Session dashboard (`--json` for the raw snapshot) |
-| `add-position` | Seed `sl_pct` (and pdh/pdl) for a symbol |
-| `monitor` | Run the SL-lifecycle loop in the foreground (what `start` backgrounds) |
-| `squareoff` | Cancel SLs and market-exit all MIS now |
-| `enter` | Open a MIS position + SL now (no MCP needed) |
-| `arm` | Arm a price trigger watched over the tick WebSocket |
-| `add` | Scale into an open position (rewrites the risk seed) |
-| `exit` | Exit ONE symbol (cancel its SL, then market-exit) |
-| `web` | Local dashboard — **can place orders** behind typed confirmation; binds to localhost only, always |
-| `ask` | Ask Claude (runs the CLI if present, else queues) |
-| `protect` | Re-place a missing SL on an open position |
-| `quote` | LTP + OHLC without the MCP session |
-| `triggers` | List armed / fired triggers |
-| `disarm` | Cancel armed triggers (all, or one symbol) |
+## Multi-broker
 
-`add-position` (and `enter`/`arm`/`add`) write `data/risk.json` — the handoff
-file the Claude skill also writes after placing entries (sl_pct per symbol,
-optional pdh/pdl). Without a seed, sl_pct is derived from the virgin SL order
-(logged as a warning); a position with *no* SL order and no seed triggers a
-modal alert.
+The daemon talks to a broker through a small port (`src/vigil/ports.py`) — six reads, four
+mutations, with no notion of "entry" vs "exit" at that layer, just BUY vs SELL. Two adapters
+ship today: Kite (`src/vigil/kite_adapter.py`) and an in-process paper broker
+(`src/vigil/paper_adapter.py`) that keeps its own simulated order book. Writing a new one is
+a single class plus running `tests/conformance/test_broker_contract.py` against it — see
+[`docs/adding-a-broker.md`](docs/adding-a-broker.md).
+
+## The Claude skill
+
+`skill/intraday-trader/` is the companion Claude Code skill for everything the daemon
+doesn't decide for you — morning bias, macro theme, sector ranking, entry timing, and
+post-session review. Install it with:
+
+```bash
+ln -s "$(pwd)/skill/intraday-trader" ~/.claude/skills/intraday-trader
+```
+
+(or copy it, if you'd rather not symlink). It talks to the daemon entirely through the
+`vigil` CLI — see the skill's own `SKILL.md` for its hard rules, chief among them: **the
+skill never modifies an SL order once the daemon owns it.**
 
 ## Tests
 
+```bash
+pip install -e ".[kite,dev]"
+pytest tests/ -q
 ```
-.venv/bin/python -m pytest tests/ -q
-```
 
-Includes regression tests for the two canonical incidents (DRREDDY fixed-5%
-trail flaw, INDIGO stop-hunt SL) from sl-rules.md.
+Includes a golden characterization test that replays a full scripted session and asserts
+the exact ordered event stream, a conformance suite run against every broker adapter, and
+regression tests for the incidents in [`docs/incidents/`](docs/incidents/).
 
-## Acceptance path before trusting it with money
+## Docs
 
-1. `vigil positions` after a morning login — discovery matches reality.
-2. One full market session with `--dry-run` — diff the `DRY_RUN_INTENT` events
-   against what the Claude loop actually did.
-3. First live session with a single small position.
+- [`docs/quickstart.md`](docs/quickstart.md) — first session, paper mode
+- [`docs/usage.md`](docs/usage.md) — every command
+- [`docs/safety.md`](docs/safety.md) — blast radius: what can place an order, what dry-run
+  doesn't cover, why the dashboard is loopback-only
+- [`docs/sl-rules.md`](docs/sl-rules.md) — the SL lifecycle spec
+- [`docs/architecture.md`](docs/architecture.md) — how the pieces fit together
+- [`docs/adding-a-broker.md`](docs/adding-a-broker.md) — the port contract, for a new adapter
+- [`docs/markets.md`](docs/markets.md) — session hours, squareoff timing, holidays
+- [`docs/incidents/`](docs/incidents/) — real sessions that shaped the hard rules above
 
-## Not in v1 (deliberate)
+## License
 
-Sector ranking and position sizing (the Claude skill's job, not this daemon's
-— `enter`/`add`/`arm` take an explicit qty from the caller and place it, they
-don't decide it), a launchd/systemd service definition (currently
-`vigil start` + your own terminal session or `screen`/`tmux`), true intraday
-swing-high/low detection for the stop-hunt guard (today's running day-H/L is
-used as one of three PDH/PDL sources — see docs/USAGE.md).
-
-Entry placement, the KiteTicker websocket (armed triggers), and the NSE
-holiday calendar (`data/holidays.txt`, one `YYYY-MM-DD` per line) are all
-implemented — an earlier version of this list called them out as missing
-after they'd already shipped. If you're reading this and something else here
-looks stale, `vigil --help` and the test suite are the ground truth.
+MIT — see [`LICENSE`](LICENSE).

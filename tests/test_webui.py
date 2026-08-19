@@ -215,11 +215,11 @@ def test_static_content_types_cover_exactly_the_served_files():
 
 def test_every_command_is_logged_with_one_trace(tmp_path, monkeypatch, _never_really_run):
     """A dashboard click must leave a request record and a result record, same trace."""
-    from vigil import audit, config
+    from vigil import config
     monkeypatch.setattr(config, "LOGS_DIR", tmp_path)
     r = webui.run_command("status", {}, None)
-    rows = [__import__("json").loads(l)
-            for l in (tmp_path / "actions.jsonl").read_text().splitlines()]
+    rows = [__import__("json").loads(line)
+            for line in (tmp_path / "actions.jsonl").read_text().splitlines()]
     kinds = [x["kind"] for x in rows]
     assert "command.requested" in kinds and "command.finished" in kinds
     traces = {x["trace"] for x in rows}
@@ -235,7 +235,7 @@ def test_refused_command_is_still_auditable(tmp_path, monkeypatch, _never_really
     assert _never_really_run == []
     path = tmp_path / "actions.jsonl"
     if path.exists():
-        rows = [__import__("json").loads(l) for l in path.read_text().splitlines()]
+        rows = [__import__("json").loads(line) for line in path.read_text().splitlines()]
         assert "command.finished" not in [x["kind"] for x in rows]
 
 

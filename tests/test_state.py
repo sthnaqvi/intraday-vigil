@@ -1,7 +1,8 @@
 """Reconciliation and restart-recovery tests."""
 import json
 
-from vigil import config, state as state_mod
+from vigil import config
+from vigil import state as state_mod
 from vigil.models import Order, Position
 from vigil.state import SessionState, TrackedPosition
 

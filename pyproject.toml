@@ -6,24 +6,113 @@ build-backend = "hatchling.build"
 name = "vigil"
 version = "0.1.0.dev0"
 description = "Bell-to-bell intraday trading, watched."
+readme = "README.md"
+license = "MIT"
 requires-python = ">=3.11"
+keywords = ["trading", "intraday", "stop-loss", "zerodha", "kite", "nse"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Financial and Insurance Industry",
+    "Topic :: Office/Business :: Financial :: Investment",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Operating System :: OS Independent",
+]
 dependencies = [
     "python-dotenv>=1.0",
 ]
 
-# Full ruff/mypy/optional-dependencies/entry-points/classifiers config lands in
-# Stage 10 alongside CI. This file exists right now only so `pip install -e .`
-# makes `import vigil` and `python -m vigil` resolve identically whether you're
-# running pytest (conftest.py points sys.path at src/ directly) or the CLI for
-# real — the src/ layout move (Stage 3) would otherwise leave `python -m vigil`
-# broken outside the test suite.
-
+# Core (models, rules, the daemon loop, the broker port) has NO broker SDK dependency —
+# only an adapter's own extra pulls one in. `paper` is intentionally empty: the paper
+# adapter is pure Python and ships in core; the extra exists so `pip install vigil[paper]`
+# reads symmetrically with `vigil[kite]` in docs, not because it installs anything.
 [project.optional-dependencies]
 kite = ["kiteconnect>=5.2"]
-dev = ["pytest>=8.0", "pytest-cov>=5.0"]
+paper = []
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=5.0",
+    "pytest-socket>=0.7",
+]
+lint = [
+    "ruff>=0.6",
+    "mypy>=1.11",
+    "import-linter>=2.0",
+]
+
+[project.urls]
+Homepage = "https://github.com/YOUR-USERNAME/vigil"
+Issues = "https://github.com/YOUR-USERNAME/vigil/issues"
 
 [project.scripts]
 vigil = "vigil.cli:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/vigil"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+# S = flake8-bandit. Kept on deliberately: this codebase runs subprocess (cli.py daemon
+# spawn), http.server (webui.py), and a webbrowser open (auth.py) in a path that manages
+# real orders — exactly where bandit's checks earn their keep, not where they're noise.
+select = ["E", "F", "I", "S", "B", "UP"]
+ignore = [
+    "S101",  # assert — used deliberately as an internal invariant check, not input validation
+    # S110/S603/S607 are all real findings ruff correctly flags, reviewed and kept as-is
+    # rather than suppressed per-line, because each is the SAME small set of deliberate
+    # patterns repeated across the codebase, not distinct risks needing distinct fixes:
+    "S110",  # try/except/pass around logging and notifications — these must never break
+             # the money-management path they're reporting on (audit.py, notify.py,
+             # monitor.py); each site is a logging/alert call, never a mutation.
+    "S603",  # subprocess.run/Popen with a dynamic argv — every call site either spawns
+             # `sys.executable -m vigil ...` (cli.py) or a whitelisted, typed argv built
+             # by webui.py's own command table, never raw external input. shell=True is
+             # never used anywhere in this codebase.
+    "S607",  # starting a process by bare name (osascript, notify-send) rather than an
+             # absolute path — deliberate: these are platform-specific system tools whose
+             # absolute path varies by OS, so a PATH lookup is the only portable choice.
+    "UP042", # Direction(str, Enum) -> StrEnum: a real Python 3.11+ option, left as-is to
+             # avoid a subtly different __str__/serialization contract this late without
+             # a dedicated behavioral check — worth revisiting deliberately, not as a
+             # lint-driven drive-by.
+]
+
+[tool.ruff.lint.per-file-ignores]
+"tests/*" = ["S101", "S106"]  # asserts and literal test "passwords"/tokens are expected in tests
+
+[tool.mypy]
+python_version = "3.11"
+warn_unused_ignores = true
+warn_redundant_casts = true
+
+# Strict only where a type error is a real money-path bug, not everywhere — the CLI/webui
+# glue layers are typed loosely on purpose (argparse.Namespace, JSON payloads) and strict
+# mode there would be noise, not safety.
+[[tool.mypy.overrides]]
+module = ["vigil.models", "vigil.ports", "vigil.rules", "vigil.market_profile", "vigil.state"]
+strict = true
+
+[tool.importlinter]
+root_package = "vigil"
+
+[[tool.importlinter.contracts]]
+name = "core modules never import Kite-specific adapter code directly"
+type = "forbidden"
+source_modules = [
+    "vigil.models", "vigil.ports", "vigil.guard", "vigil.execution", "vigil.rules",
+    "vigil.state", "vigil.monitor", "vigil.triggers", "vigil.feed", "vigil.market_profile",
+]
+forbidden_modules = ["vigil.kite_adapter", "vigil.mapping"]
+
+[tool.pytest.ini_options]
+addopts = "--disable-socket --allow-unix-socket"
+# --allow-unix-socket: EventLog/audit.py write to local files, not sockets, but pytest's
+# own machinery and some fixtures use unix sockets for IPC on certain platforms. The
+# blanket --disable-socket is what actually matters: this suite must be structurally
+# incapable of reaching a broker, and that's true whether or not any single test
+# remembers to mock one.

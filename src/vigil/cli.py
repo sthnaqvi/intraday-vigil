@@ -16,17 +16,24 @@ from .commands.daemon import cmd_login, cmd_monitor, cmd_start, cmd_stop
 from .commands.info import cmd_paths, cmd_positions, cmd_quote, cmd_status
 from .commands.integrations import cmd_ask, cmd_web
 from .commands.orders import (
-    cmd_add, cmd_add_position, cmd_enter, cmd_exit, cmd_protect, cmd_squareoff,
+    cmd_add,
+    cmd_add_position,
+    cmd_enter,
+    cmd_exit,
+    cmd_protect,
+    cmd_squareoff,
 )
 from .events import setup_logging
 
 
 def main(argv: list[str] | None = None) -> int:
     setup_logging()
-    p = argparse.ArgumentParser(prog="vigil", description="Intraday SL-lifecycle daemon (Zerodha Kite)")
+    p = argparse.ArgumentParser(prog="vigil",
+                                description="Intraday SL-lifecycle daemon")
     sub = p.add_subparsers(dest="cmd", required=True)
 
-    sp = sub.add_parser("start", help="morning one-shot: login if needed + run daemon in background")
+    sp = sub.add_parser("start",
+                        help="morning one-shot: login if needed + run daemon in background")
     sp.add_argument("--dry-run", action="store_true", help="log intents, mutate nothing")
     sp.add_argument("--force", action="store_true", help="run outside market hours")
     sp.add_argument("--paste", action="store_true", help="paste-URL login fallback")
@@ -41,7 +48,8 @@ def main(argv: list[str] | None = None) -> int:
     sp.set_defaults(fn=cmd_stop)
 
     sp = sub.add_parser("login", help="daily Kite login (skips browser if token still valid)")
-    sp.add_argument("--paste", action="store_true", help="paste redirected URL instead of local listener")
+    sp.add_argument("--paste", action="store_true",
+                    help="paste redirected URL instead of local listener")
     sp.add_argument("--force", action="store_true", help="re-login even if token looks valid")
     sp.set_defaults(fn=cmd_login)
 
