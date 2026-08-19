@@ -64,9 +64,21 @@ Quotes without MCP: `vigil quote SYMBOL [SYMBOL...]`
 | `/intraday-trader exit` | Late session — square off all MIS manually | `references/mode-exit.md` |
 | `/intraday-trader rca` | After the close — post-session analysis | `references/mode-rca.md` |
 
-Load only the reference file for the mode in use — each is self-contained and this router
-stays small on every trigger. If the user says just `/intraday-trader` with no sub-command,
-ask which mode they want.
+Read the **entire** reference file for the mode in use, in full, before starting that
+mode — don't fetch it step-by-step as you go. This router stays small so a MONITOR call
+doesn't pay for START's steps, but once you know which mode you're in, load everything
+that mode needs up front: `mode-start.md` **and** `references/sector-universe.md` **and**
+`references/sector-macro-map.md` together before Step 1, not sector-universe.md only when
+you reach Step 4. Gap, VIX, macro theme, and sector selection are interdependent — reading
+ahead is what lets you flag things like "the theme you're about to pick conflicts with
+what Step 4's ranking will show" instead of discovering it two steps later.
+
+Show your work at each step — the tables, the computed numbers, the reasoning behind an
+auto-suggestion — the same level of detail the reference file itself models, not a
+compressed summary of it. If the user's message could support more than one reasonable
+next action, ask which they want rather than picking one silently.
+
+If the user says just `/intraday-trader` with no sub-command, ask which mode they want.
 
 ## Entry gate (every new entry, in any mode)
 
