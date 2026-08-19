@@ -43,8 +43,8 @@ lint = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/YOUR-USERNAME/vigil"
-Issues = "https://github.com/YOUR-USERNAME/vigil/issues"
+Homepage = "https://github.com/sthnaqvi/vigil"
+Issues = "https://github.com/sthnaqvi/vigil/issues"
 
 [project.scripts]
 vigil = "vigil.cli:main"

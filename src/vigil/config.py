@@ -1,4 +1,4 @@
-"""All rule constants in one place. Spec: ~/.claude/skills/intraday-trader/references/sl-rules.md"""
+"""All rule constants in one place. Spec: docs/sl-rules.md (repo root)."""
 import os
 from pathlib import Path
 
