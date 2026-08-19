@@ -32,6 +32,7 @@ tr:last-child td{border-bottom:0}
 .pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px}
 .ok{background:#123524;color:var(--up)} .bad{background:#3a1416;color:var(--down)}
 .warnp{background:#3a2c10;color:var(--warn)}
+.paper{background:#1b2340;color:var(--accent);font-weight:600}
 .banner{background:#3a1416;border:1px solid var(--down);color:#ffd7d7;
         padding:10px 14px;border-radius:8px;font-weight:600;margin-bottom:12px}
 .stale{background:#3a2c10;border:1px solid var(--warn);color:#ffe9bf;

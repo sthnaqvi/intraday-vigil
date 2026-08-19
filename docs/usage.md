@@ -22,15 +22,22 @@ logged `DRY_RUN_INTENT` events against what you'd expect (see `docs/safety.md`).
 
 | Command | What it does |
 |---|---|
-| `vigil start [--dry-run] [--force] [--paste] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
+| `vigil start [--dry-run] [--force] [--paste] [--paper] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
 | `vigil stop` | Stop the daemon (broker SLs remain active) |
-| `vigil login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work |
-| `vigil monitor [--dry-run] [--force] [--allow-silent]` | The loop in the foreground (what `start` backgrounds) |
+| `vigil login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work. Also ends any paper session. |
+| `vigil monitor [--dry-run] [--force] [--paper] [--allow-silent]` | The loop in the foreground (what `start` backgrounds) |
 | `vigil paths [--json]` | Where this install keeps its state (VIGIL_HOME/XDG resolution) |
 
 `--allow-silent` lets a live daemon run without a detected desktop notifier. Without it, a
 live daemon with no working notifier **refuses to start** — you'd otherwise get zero
-alerts for SL hits, unprotected positions, or token expiry.
+alerts for SL hits, unprotected positions, or token expiry. (Paper mode and `--dry-run`
+are exempt — neither places a real order, so a missing notifier isn't a safety issue.)
+
+`--paper` runs against a simulated broker instead of Kite — no account, no credentials,
+no real money, and `vigil start --paper` skips login entirely. It's sticky: once you start
+in paper mode, every other command (`enter`, `status`, `web`, ...) stays in paper mode
+without needing the flag again, until you run `vigil start` without `--paper` or
+`vigil login`. See `docs/quickstart.md` for a full walkthrough.
 
 ## Reading state
 
@@ -40,6 +47,7 @@ alerts for SL hits, unprotected positions, or token expiry.
 | `vigil status [--json]` | Session dashboard; `--json` prints the raw snapshot |
 | `vigil quote SYM [SYM...]` | LTP + OHLC without the MCP session |
 | `vigil triggers` | List armed / fired triggers |
+| `vigil paper-price SYM PRICE` | Paper mode only: move a symbol's simulated price, filling any resting stop it crosses |
 
 ## Placing and managing orders
 

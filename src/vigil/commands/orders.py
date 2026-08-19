@@ -9,9 +9,26 @@ from .. import config, execution, rules
 from .. import state as state_mod
 from .. import triggers as triggers_mod
 from ..monitor import MonitorLoop
+from ..paper_mode import is_paper_mode
 from ..rules import Direction
 from ..state import SessionState
 from ._shared import _as_fraction, _live_broker, _open_position
+
+
+def cmd_paper_price(args) -> int:
+    """Move a symbol's simulated price in paper mode — the only way price moves at all
+    without a real market feeding it. Fills any resting stop the move just crossed, same
+    as a real fill would; `vigil positions` / `vigil status` reflect it immediately."""
+    if not is_paper_mode():
+        print("REFUSED — not in paper mode. Start one with `vigil start --paper`.",
+              file=sys.stderr)
+        return 3
+    from ..paper_adapter import PaperAdapter
+    adapter = PaperAdapter.load_or_create(config.DATA_DIR / "paper_book.json")
+    symbol = args.symbol.upper()
+    adapter.set_price(symbol, args.price)
+    print(f"{symbol}: paper price set to {args.price}")
+    return 0
 
 
 def cmd_add_position(args) -> int:

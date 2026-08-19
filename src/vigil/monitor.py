@@ -425,6 +425,7 @@ class MonitorLoop:
         snapshot = {
             "as_of": now.isoformat(),
             "daemon": {"pid": os.getpid(), "mode": "dry_run" if self.broker.dry_run else "live",
+                       "broker": self.broker.adapter_kind,
                        "cycle_seconds": interval, "cycles_run": self.cycles_run},
             "no_new_entries": blocked,
             "no_new_entries_reason": why,

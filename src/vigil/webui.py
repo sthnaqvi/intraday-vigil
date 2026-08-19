@@ -25,7 +25,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
-from . import audit, claudelink, clock, config
+from . import audit, claudelink, clock, config, paper_mode
 from . import triggers as triggers_mod
 
 SYMBOL_RE = re.compile(r"^[A-Z0-9&\-]{1,24}$")
@@ -80,8 +80,15 @@ _account_cache: dict = {"ts": 0.0, "data": None}
 
 
 def account_snapshot(force: bool = False) -> dict:
-    """Client id, name and live margins. Never raises — a dead token is a display state."""
+    """Client id, name and live margins. Never raises — a dead token is a display state.
+
+    In paper mode, there is no real Kite account to fetch, and no reason to make the
+    header show a scary auth error for credentials a paper session never needed."""
     global _profile_cache
+    if paper_mode.is_paper_mode():
+        return {"ok": True, "paper": True, "client_id": "PAPER",
+                "name": "simulated account, no real money", "broker": "paper",
+                "available": None}
     now = time.monotonic()
     if not force and _account_cache["data"] and now - _account_cache["ts"] < ACCOUNT_TTL_S:
         return _account_cache["data"]
@@ -299,7 +306,8 @@ def _snapshot() -> dict:
     return {
         "daemon": {"running": pid is not None, "pid": pid, "fresh": bool(fresh),
                    "age_s": int(age) if age is not None else None,
-                   "mode": snap.get("daemon", {}).get("mode", "?")},
+                   "mode": snap.get("daemon", {}).get("mode", "?"),
+                   "broker": snap.get("daemon", {}).get("broker", "kite")},
         "positions": snap.get("positions", []),
         "closed_today": snap.get("closed_today", []),
         "kill_switch": snap.get("kill_switch", False),
@@ -432,10 +440,17 @@ def serve(port: int = 8765) -> None:
     os.environ[audit.SOURCE_ENV] = "web"
     audit.action("web.serve", host=_BIND_HOST, port=port, ui_version=_ui_version())
     srv = HTTPServer((_BIND_HOST, port), Handler)
-    print(f"Dashboard: http://{_BIND_HOST}:{port}   (Ctrl-C to stop)")
-    print("Order-placing commands require a typed confirmation, checked server-side.")
+    # flush=True: stdout is fully buffered (not line-buffered) whenever it isn't a TTY —
+    # e.g. `vigil web > web.log 2>&1 &`, exactly how a backgrounded dashboard normally
+    # runs. Without an explicit flush, this message can sit unwritten in the buffer for
+    # as long as serve_forever() blocks, which in practice means "until the process is
+    # killed" — so redirected output looks like the server never printed anything at all.
+    print(f"Dashboard: http://{_BIND_HOST}:{port}   (Ctrl-C to stop)", flush=True)
+    print("Order-placing commands require a typed confirmation, checked server-side.",
+          flush=True)
     if not claudelink.resolve_cli():
-        print("No `claude` CLI found — questions queue; read them with `vigil ask --pending`.")
+        print("No `claude` CLI found — questions queue; read them with `vigil ask --pending`.",
+              flush=True)
     try:
         srv.serve_forever()
     except KeyboardInterrupt:

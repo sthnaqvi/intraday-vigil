@@ -11,11 +11,22 @@ from .. import auth, config
 from .. import state as state_mod
 from ..broker import Broker
 from ..events import EventLog
+from ..guard import GuardedBroker
 from ..models import Position
+from ..paper_mode import is_paper_mode, set_paper_mode  # noqa: F401 (re-exported for callers)
 
 
-def _live_broker(dry_run: bool = False) -> tuple[Broker, EventLog]:
+def _live_broker(dry_run: bool = False,
+                 paper: bool | None = None) -> tuple[GuardedBroker, EventLog]:
+    """The broker every command actually talks to. `paper` defaults to whatever mode the
+    session is already in (see is_paper_mode()) — only vigil start/monitor ever pass it
+    explicitly, to enter or leave paper mode; everything else just follows along."""
     events = EventLog()
+    use_paper = is_paper_mode() if paper is None else paper
+    if use_paper:
+        from .. import paper_adapter as paper_mod
+        adapter = paper_mod.PaperAdapter.load_or_create(config.DATA_DIR / "paper_book.json")
+        return GuardedBroker(adapter, events, dry_run=dry_run), events
     kite = auth.get_kite()
     return Broker(kite, events, dry_run=dry_run), events
 
@@ -45,5 +56,5 @@ def _as_fraction(sl_pct: float) -> float:
     return sl_pct if sl_pct <= 0.2 else sl_pct / 100.0
 
 
-def _open_position(broker: Broker, symbol: str) -> Position | None:
+def _open_position(broker: GuardedBroker, symbol: str) -> Position | None:
     return state_mod.open_mis_positions(broker.positions_day()).get(symbol)

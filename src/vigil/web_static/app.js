@@ -143,7 +143,8 @@ function render(s){
   const mkt = s.market_open
     ? `<span class="pill ok">MARKET OPEN</span>`
     : `<span class="pill warnp">MARKET CLOSED</span>`;
-  $('daemon').innerHTML = (d.running
+  const paperPill = d.broker==='paper' ? `<span class="pill paper">PAPER — no real money</span> · ` : '';
+  $('daemon').innerHTML = paperPill + (d.running
     ? `<span class="pill ${d.fresh?'ok':'warnp'}">${d.fresh?'LIVE':'STALE'}</span> pid ${d.pid} · ${d.mode} · ${d.age_s}s ago`
     : `<span class="pill bad">DAEMON NOT RUNNING</span>`)
     + ` · ${mkt} ${s.now} · day <b class="${sign(s.realized_pnl_today)}">₹${n(s.realized_pnl_today)}</b>`;

@@ -20,6 +20,7 @@ from .commands.orders import (
     cmd_add_position,
     cmd_enter,
     cmd_exit,
+    cmd_paper_price,
     cmd_protect,
     cmd_squareoff,
 )
@@ -37,6 +38,11 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--dry-run", action="store_true", help="log intents, mutate nothing")
     sp.add_argument("--force", action="store_true", help="run outside market hours")
     sp.add_argument("--paste", action="store_true", help="paste-URL login fallback")
+    sp.add_argument("--paper", action="store_true",
+                    help="paper trading — a simulated broker, no real account, no real "
+                         "money. Skips login entirely. Every command run afterward "
+                         "(enter, status, web, ...) stays in paper mode until you run "
+                         "`vigil start` again without --paper, or `vigil login`.")
     sp.add_argument("--allow-silent", action="store_true",
                     help="start live even if no desktop notifier is available "
                          "(macOS osascript / Linux notify-send). You will get NO alerts "
@@ -71,6 +77,7 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("monitor", help="run the SL-lifecycle loop in the foreground")
     sp.add_argument("--dry-run", action="store_true", help="log intents, mutate nothing")
     sp.add_argument("--force", action="store_true", help="run outside market hours")
+    sp.add_argument("--paper", action="store_true", help="paper trading — see `vigil start --help`")
     sp.add_argument("--allow-silent", action="store_true",
                     help="run live even if no desktop notifier is available")
     sp.set_defaults(fn=cmd_monitor)
@@ -147,6 +154,13 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("paths", help="where this install keeps its state (VIGIL_HOME/XDG)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(fn=cmd_paths)
+
+    sp = sub.add_parser("paper-price",
+                        help="paper mode only: move a symbol's simulated price, "
+                             "filling any resting stop it crosses")
+    sp.add_argument("symbol")
+    sp.add_argument("price", type=float)
+    sp.set_defaults(fn=cmd_paper_price)
 
     sp = sub.add_parser("quote", help="LTP + OHLC without the MCP session")
     sp.add_argument("symbols", nargs="+")

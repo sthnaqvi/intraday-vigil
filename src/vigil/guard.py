@@ -32,6 +32,16 @@ class GuardedBroker:
         self._last_call = 0.0
         self._dry_seq = 0
 
+    @property
+    def adapter_kind(self) -> str:
+        """A short, display-friendly label for whatever adapter this wraps — derived from
+        its class name, not hardcoded per broker, so a new adapter gets a sensible label
+        for free. Used anywhere a user needs to be told, unambiguously, whether a session
+        is against a real account (e.g. "kite") or a simulated one (e.g. "paper") — a
+        confusion here is exactly the kind of thing that must never happen quietly."""
+        name = type(self.adapter).__name__
+        return name.removesuffix("Adapter").lower() or name.lower()
+
     # ---------- plumbing ----------
 
     def _space(self) -> None:

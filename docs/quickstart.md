@@ -1,10 +1,10 @@
 # Quickstart
 
-First session, no broker account, no money at risk. Everything below runs against
-`PaperAdapter`, an in-process simulated broker with its own order book — a genuine
-implementation of the same port Kite uses, not a stub.
+First session, start to finish, no broker account and no money at risk. Every command
+below runs against `PaperAdapter`, a real simulated broker with its own order book — the
+same code path Kite uses, not a stub.
 
-## Install
+## 1. Install
 
 ```bash
 pip install "vigil[paper]"
@@ -16,61 +16,114 @@ Confirm it landed:
 vigil --help
 ```
 
-## The shape of a session
+## 2. Start a paper session
 
-`vigil`'s daemon watches positions and manages their stop-loss lifecycle. In paper mode
-there's no live price feed driving it — you're the market. A short interactive walk:
-
-```python
-from vigil.paper_adapter import PaperAdapter
-from vigil.guard import GuardedBroker
-from vigil.events import EventLog
-from vigil.state import SessionState
-from vigil.monitor import MonitorLoop
-from vigil import execution
-from vigil.rules import Direction
-
-events = EventLog()
-adapter = PaperAdapter()
-broker = GuardedBroker(adapter, events, dry_run=False)
-
-# Seed a price, then open a long the same way `vigil enter` would.
-adapter.set_price("DEMO", 100.0)
-execution.place_entry(broker, "DEMO", Direction.LONG, 10)
-execution.place_sl(broker, "DEMO", Direction.LONG, 99.0, 10)   # 1% stop
-
-session = SessionState(date="2026-01-01")
-loop = MonitorLoop(broker, events, session, fetch_levels=False)
-loop.cycle()
-print(session.positions["DEMO"])   # phase 1, entry 100.0, sl 99.0
-
-# Move price up 1R (= entry * sl_pct) — the daemon moves the stop to breakeven (100.0).
-adapter.set_price("DEMO", 101.0)
-loop.cycle()
-print(session.positions["DEMO"].phase, session.positions["DEMO"].sl_price)  # 2 100.0
-
-# Move price back down. It's now below the *breakeven* stop (100.0, not the original
-# 99.0) — PaperAdapter fills the resting order the moment price crosses ITS trigger.
-adapter.set_price("DEMO", 99.0)
-loop.cycle()
-print(session.positions)   # {} — the position closed at breakeven, not a loss
-print(session.closed)      # exit_reason "BE_STOP", realized_r 0.0, realized_pnl 0.0
+```bash
+vigil start --paper --force
 ```
 
-That's the lifecycle's whole point: once a position reaches +1R, its downside is gone —
-the worst case from here is scratch, never the original stop.
+`--force` just means "run even if the market is closed right now" — useful for trying
+this out outside trading hours. You'll see something like:
 
-That's the entire lifecycle end to end — discovery, breakeven, exit — with nothing but
-`PaperAdapter` and a hand-driven price. The real daemon (`vigil start`) runs this same
-`MonitorLoop.cycle()` on a timer against whichever broker adapter you've configured,
-reading live prices instead of `set_price()` calls.
+```
+Daemon started (PAPER, pid 12345). It waits for the 09:15 bell if early,
+squares off at 15:05, and exits on its own. `vigil status` any time; `vigil stop` to halt.
 
-## Wiring it into the CLI (Kite)
+Paper mode — no real broker, no real money. Next: place a simulated trade with
+`vigil enter`, or open the dashboard with `vigil web` to watch it.
+```
 
-Paper mode today is a library-level story, not yet a `vigil start --paper` CLI flag — see
-`src/vigil/paper_adapter.py`'s module docstring for the adapter itself, which is fully
-implemented and covered by the conformance suite; the CLI/persistence wiring on top of it
-is open work. For a live Kite session:
+That daemon is now running in the background, doing nothing yet — it has no position to
+manage. Check on it any time with `vigil status`:
+
+```
+Daemon:  running (pid 12345) | mode live | broker paper | snapshot 3s ago
+*** PAPER MODE — simulated broker, no real money at risk ***
+
+No open positions.
+
+Day realised: Rs +0.00 (+0.00R)
+```
+
+## 3. Open the dashboard
+
+```bash
+vigil web
+```
+
+This starts a local web server and prints the address it's listening on
+(`http://127.0.0.1:8765` by default). **Open that URL in your own browser** — the command
+doesn't open a browser tab for you, you have to navigate there yourself. Leave this
+command running in its own terminal (or background it); it serves the dashboard for as
+long as it's alive.
+
+The header shows a blue **PAPER — no real money** badge the whole time you're in paper
+mode, so it's never ambiguous whether real money is involved.
+
+## 4. Set a starting price and place a trade
+
+A paper session has no real market feeding it prices — you move the price yourself with
+`vigil paper-price`. Open a **second terminal** (leave `vigil web` running in the first)
+and set a starting price before entering, or the trade would fill at zero:
+
+```bash
+vigil paper-price DEMO 100.00
+vigil enter DEMO --side long --qty 10 --sl-pct 1.0 --yes
+```
+
+`--sl-pct 1.0` means a 1% stop — `vigil enter` computes the stop price from the current
+paper price and places both the entry and the stop atomically, same as it would against
+Kite. **This trade exists at the broker immediately** (`vigil positions` shows it right
+away) — but the background daemon only *discovers* it on its own next cycle (every ~150s
+by default), so `vigil status` and the dashboard can take up to that long to show it for
+the first time. That's not a bug or a hang; it's the same cadence the daemon polls a real
+broker at.
+
+## 5. Watch the SL lifecycle run
+
+Move the price up 1% (one "R") and watch the daemon move the stop to breakeven on its
+next cycle (every ~150s, or `vigil monitor` cycles as fast as it's told to — the
+background daemon from step 2 is already doing this on its own schedule):
+
+```bash
+vigil paper-price DEMO 101.00
+```
+
+Give it a cycle or two (watch the dashboard's **Recent Events** panel, or re-run
+`vigil status`) — you'll see a `PHASE_CHANGE` event and the stop move to entry price. Move
+it further to trigger the mechanical trail (Phase 3 at +1.5R):
+
+```bash
+vigil paper-price DEMO 103.00
+```
+
+Move it back down through the resting stop to close the position:
+
+```bash
+vigil paper-price DEMO 100.50
+```
+
+`vigil status` now shows it in **Closed today**, with realised R and P&L.
+
+## 6. Square off and review
+
+```bash
+vigil squareoff --yes    # cancels any resting stops, market-exits anything still open
+vigil stop                # halts the daemon; harmless to run even if it already exited
+```
+
+For the post-session review, read today's event log — every decision the daemon made,
+in order:
+
+```bash
+vigil paths --json    # find data_dir, then:
+cat "$(vigil paths --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["data_dir"])')"/events-$(date +%F).jsonl
+```
+
+The Claude skill's RCA mode (`/intraday-trader rca`) does this same walk automatically and
+scores the session — see `skill/intraday-trader/references/mode-rca.md`.
+
+## Next: a live Kite session
 
 ```bash
 pip install "vigil[kite]"
@@ -80,14 +133,15 @@ pip install "vigil[kite]"
    set its redirect URL to `http://127.0.0.1:3100/kite-token-exchange`.
 2. Put `KITE_API_KEY` and `KITE_API_SECRET` in the daemon's env file (`vigil paths --json`
    → `state_dir` → `.env`, `chmod 600` it).
-3. `vigil start --dry-run` — logs in, runs the full loop, but every SL modification is only
-   *logged* (as `DRY_RUN_INTENT` events), nothing touches a real order. Run at least one
-   full session this way and diff the log against what you'd expect before going live.
-4. `vigil status` any time; `vigil stop` to halt (resting stops stay live at the exchange).
+3. `vigil start --dry-run` — logs in for real, runs the full loop, but every SL
+   modification is only *logged* (as `DRY_RUN_INTENT` events), nothing touches a real
+   order. Run at least one full session this way and diff the log against what you'd
+   expect before going live.
+4. `vigil login` any time ends a paper session and switches back to your real account.
 
-Read [`docs/safety.md`](safety.md) before dropping `--dry-run`.
+**Read [`docs/safety.md`](safety.md) before dropping `--dry-run`.**
 
-## Next
+## Reference
 
 - [`docs/usage.md`](usage.md) — every command
 - [`docs/sl-rules.md`](sl-rules.md) — exactly what the daemon does and why

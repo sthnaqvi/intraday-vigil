@@ -9,11 +9,15 @@ import types
 import pytest
 
 from vigil import notify
-from vigil.commands import daemon
+from vigil.commands import _shared, daemon
 
 
 class _Args(types.SimpleNamespace):
     """Minimal stand-in for argparse.Namespace with cmd_monitor's expected fields."""
+
+    def __init__(self, **kwargs):
+        kwargs.setdefault("paper", False)
+        super().__init__(**kwargs)
 
 
 @pytest.fixture(autouse=True)
@@ -46,6 +50,13 @@ def test_dry_run_is_exempt_from_the_notifier_check(monkeypatch):
     monkeypatch.setattr(notify, "can_notify", lambda: False)
     with pytest.raises(AssertionError, match="_live_broker was called"):
         daemon.cmd_monitor(_Args(dry_run=True, allow_silent=False, force=False))
+
+
+def test_paper_mode_is_exempt_from_the_notifier_check(monkeypatch):
+    """Paper mode places no REAL orders, same reasoning as dry-run."""
+    monkeypatch.setattr(notify, "can_notify", lambda: False)
+    with pytest.raises(AssertionError, match="_live_broker was called"):
+        daemon.cmd_monitor(_Args(dry_run=False, allow_silent=False, force=False, paper=True))
 
 
 def test_live_monitor_proceeds_when_a_notifier_is_available(monkeypatch):
@@ -81,3 +92,50 @@ def test_start_forwards_allow_silent_to_the_spawned_daemon(monkeypatch, tmp_path
 
     daemon.cmd_start(_Args(dry_run=False, force=False, paste=False, allow_silent=True))
     assert "--allow-silent" in captured["cmd"]
+
+
+def test_start_with_paper_skips_login_and_forwards_the_flag(monkeypatch, tmp_path):
+    """--paper must never touch auth.login (there's no broker to log into) and must cross
+    the subprocess boundary into the spawned `vigil monitor`, same as --allow-silent."""
+    from vigil import config
+    monkeypatch.setattr(config, "LOGS_DIR", tmp_path / "logs")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "PID_FILE", tmp_path / "data" / "daemon.pid")
+    monkeypatch.setattr(daemon, "_daemon_pid", lambda: None)
+
+    def _boom_login(**k):
+        raise AssertionError("auth.login must not be called in paper mode")
+    monkeypatch.setattr(daemon.auth, "login", _boom_login)
+
+    captured = {}
+
+    class FakeProc:
+        pid = 4242
+        returncode = 0
+        def poll(self):
+            return None
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = cmd
+        return FakeProc()
+
+    monkeypatch.setattr(daemon.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(daemon.time, "sleep", lambda s: None)
+
+    code = daemon.cmd_start(
+        _Args(dry_run=False, force=False, paste=False, allow_silent=False, paper=True))
+    assert code == 0
+    assert "--paper" in captured["cmd"]
+    assert _shared.is_paper_mode()
+
+
+def test_login_clears_paper_mode(monkeypatch, tmp_path):
+    """Running a real login is an explicit signal to leave paper mode behind."""
+    from vigil import config
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    _shared.set_paper_mode(True)
+    assert _shared.is_paper_mode()
+
+    monkeypatch.setattr(daemon.auth, "login", lambda **k: None)
+    daemon.cmd_login(_Args(paste=False, force=False))
+    assert not _shared.is_paper_mode()

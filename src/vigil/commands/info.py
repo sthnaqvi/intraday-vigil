@@ -7,10 +7,12 @@ from datetime import datetime
 from .. import clock, config
 from .. import state as state_mod
 from .. import triggers as triggers_mod
-from ._shared import _daemon_pid, _live_broker
+from ._shared import _daemon_pid, _live_broker, is_paper_mode
 
 
 def cmd_positions(args) -> int:
+    if is_paper_mode():
+        print("*** PAPER MODE — simulated broker, no real money at risk ***")
     broker, _ = _live_broker()
     rows = broker.positions_day()
     orders = broker.orders()
@@ -48,7 +50,11 @@ def cmd_status(args) -> int:
 
     running = f"running (pid {pid})" if pid else "NOT RUNNING"
     freshness = f"{int(age)}s ago" + ("" if fresh else "  ** STALE **")
-    print(f"Daemon:  {running} | mode {snap['daemon']['mode']} | snapshot {freshness}")
+    broker_kind = snap["daemon"].get("broker", "kite")  # old snapshots predate this field
+    print(f"Daemon:  {running} | mode {snap['daemon']['mode']} | broker {broker_kind} "
+          f"| snapshot {freshness}")
+    if broker_kind == "paper":
+        print("*** PAPER MODE — simulated broker, no real money at risk ***")
     flags = []
     if snap.get("kill_switch"):
         flags.append("KILL-SWITCH ACTIVE")
