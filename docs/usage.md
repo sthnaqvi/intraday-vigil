@@ -66,6 +66,23 @@ without needing the flag again, until you run `vigil start` without `--paper` or
 (kill switch, `no_new_entries`, the hard cutoff) — override the gate only with
 `--override-gate`, and only when you mean it.
 
+## Automatic exits (independent of the resting SL)
+
+| Command | What it does |
+|---|---|
+| `vigil arm-exit SYM --above/--below PRICE [--note ...]` | Arm an automatic exit on SYM — fires with **no confirmation** |
+| `vigil exit-triggers` | List armed / fired exit triggers |
+| `vigil disarm-exit [SYM]` | Cancel armed exit triggers (all, or one symbol) |
+
+An exit trigger is a second, independent watch on top of the resting SL — "close this the
+moment price crosses X," for taking profit early or cutting a loss faster than the
+mechanical trail would. Unlike `vigil arm` (which defaults to alert-only), an exit trigger
+always fires automatically: arming one only makes sense if breaking the level also closes
+the position. On fire, the daemon cancels the resting SL and market-exits at whatever
+quantity is actually open — read fresh from the broker, not assumed — so it fires correctly
+even if the position size changed since the trigger was armed. Works on any symbol with an
+open (or soon-to-be-open) position, whether or not that symbol also has an entry trigger.
+
 ## Dashboard and the Claude bridge
 
 | Command | What it does |
@@ -82,7 +99,8 @@ See `docs/safety.md` for exactly what the dashboard's confirmation flow guarante
 | `risk.json` | skill or `vigil add-position`/`enter`/`arm` | daemon | `{"SYMBOL": {"sl_pct": 0.01, "pdh": 4205, "pdl": 4080}}` |
 | `status.json` | daemon, every cycle | skill / `vigil status` | Full session snapshot: positions, phases, P&L, flags |
 | `events-<date>.jsonl` | daemon | skill's RCA mode, `vigil ask` context | Append-only audit log of every decision |
-| `triggers.json` | `vigil arm`/`disarm` | daemon | Armed trigger state |
+| `triggers.json` | `vigil arm`/`disarm` | daemon | Armed entry-trigger state |
+| `exit_triggers.json` | `vigil arm-exit`/`disarm-exit` | daemon | Armed exit-trigger state |
 
 Without a `risk.json` seed the daemon still works: it derives `sl_pct` from the untouched
 SL order (logged as a warning). A position with **no SL at all** and no seed triggers a
@@ -106,7 +124,8 @@ another terminal; the daemon picks up the new token on its own process restart �
 `from_trigger`/`to_trigger`/`reason`/`guard_applied`), `SL_MODIFY_VERIFIED`,
 `SL_MODIFY_REJECTED`, `SL_REPLACED` (dead order re-placed), `SL_QTY_FIX`, `SL_LOST`,
 `SL_HIT`, `ORPHAN_SL_CANCELLED`, `TIME_ALERT`, `SQUAREOFF_*`, `KILL_SWITCH`,
-`TRIGGER_ARMED`/`HIT`/`FIRED`/`BLOCKED`, `TICKER_CONNECTED`/`CLOSED`/`ERROR`,
+`TRIGGER_ARMED`/`HIT`/`FIRED`/`BLOCKED`, `EXIT_TRIGGER_HIT`/`FIRED`/`FAILED`,
+`TICKER_CONNECTED`/`CLOSED`/`ERROR`,
 `DRY_RUN_INTENT`, `WARNING`, `ERROR`. Grep example:
 
 ```bash

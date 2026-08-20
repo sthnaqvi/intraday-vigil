@@ -289,3 +289,104 @@ def test_trigger_engine_ignores_prices_for_other_symbols(tmp_path, monkeypatch):
 
     assert kite.place_calls == []
     assert T.load()[0].status == T.ARMED
+
+
+# ---------- exit triggers ----------
+
+@pytest.fixture(autouse=True)
+def _isolate_exit_triggers(tmp_path, monkeypatch):
+    monkeypatch.setattr(T, "EXIT_TRIGGERS_FILE", tmp_path / "exit_triggers.json")
+    yield
+
+
+def test_exit_crossed_above_and_below():
+    up = T.ExitTrigger("RELIANCE", 1340.0, "above")
+    assert not up.crossed(1340.0)
+    assert up.crossed(1340.05)
+
+    down = T.ExitTrigger("HCLTECH", 1290.0, "below")
+    assert not down.crossed(1290.0)
+    assert down.crossed(1289.95)
+
+
+def test_exit_trigger_persistence_round_trip():
+    T.save_exit_triggers([T.ExitTrigger("RELIANCE", 1340.0, "above", note="take profit")])
+    back = T.load_exit_triggers()
+    assert len(back) == 1 and back[0].symbol == "RELIANCE" and back[0].level == 1340.0
+    assert T.armed_exits(back) == back
+
+
+def test_all_armed_symbols_unions_entry_and_exit_triggers():
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)])
+    T.save_exit_triggers([T.ExitTrigger("HCLTECH", 1290.0, "below")])
+    assert T.all_armed_symbols() == {"RELIANCE", "HCLTECH"}
+
+
+def test_trigger_engine_fires_exit_trigger_and_closes_the_position(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_position("RELIANCE", 100, buy_price=1300.0)
+    kite.add_sl_order("RELIANCE", "SELL", 1290.0, 100)
+    T.save_exit_triggers([T.ExitTrigger("RELIANCE", 1340.0, "above")])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("RELIANCE", 1340.5, "ws")
+
+    assert kite.cancel_calls, "resting SL must be cancelled before the market exit"
+    kinds = [c["order_type"] for c in kite.place_calls]
+    assert kinds == ["MARKET"]
+    assert kite.place_calls[0]["transaction_type"] == "SELL"
+    fired = T.load_exit_triggers()[0]
+    assert fired.status == T.FIRED
+    assert _events(tmp_path, "EXIT_TRIGGER_HIT")
+    assert _events(tmp_path, "EXIT_TRIGGER_FIRED")
+
+
+def test_trigger_engine_exit_trigger_with_no_position_cancels_not_fires(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    T.save_exit_triggers([T.ExitTrigger("RELIANCE", 1340.0, "above")])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("RELIANCE", 1340.5, "ws")
+
+    assert kite.place_calls == []
+    t = T.load_exit_triggers()[0]
+    assert t.status == T.CANCELLED and "no open position" in t.detail
+
+
+def test_trigger_engine_exit_trigger_below_level_does_not_fire(tmp_path, monkeypatch):
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_position("RELIANCE", 100, buy_price=1300.0)
+    T.save_exit_triggers([T.ExitTrigger("RELIANCE", 1340.0, "above")])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("RELIANCE", 1320.0, "ws")
+
+    assert kite.place_calls == []
+    assert T.load_exit_triggers()[0].status == T.ARMED
+
+
+def test_trigger_engine_fires_entry_and_exit_triggers_independently(tmp_path, monkeypatch):
+    """A symbol can carry both kinds at once — an armed entry and an armed exit on some
+    other already-open symbol — and each fires on its own price without touching the
+    other's state."""
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    kite.set_position("HCLTECH", 200, sell_price=1296.0)
+    kite.add_sl_order("HCLTECH", "BUY", 1310.0, 200)
+    T.save([T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.01, auto=True)])
+    T.save_exit_triggers([T.ExitTrigger("HCLTECH", 1280.0, "below")])
+    engine = T.TriggerEngine(broker, events, FakeSession())
+
+    engine.on_price("RELIANCE", 1329.0, "ws")
+    engine.on_price("HCLTECH", 1279.5, "ws")
+
+    assert T.load()[0].status == T.FIRED
+    assert T.load_exit_triggers()[0].status == T.FIRED

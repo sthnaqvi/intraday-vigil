@@ -1,7 +1,8 @@
 """CLI: argparse wiring only. Command implementations live in commands/*.py.
 
 start | stop | login | positions | status | add-position | monitor | squareoff |
-enter | arm | add | exit | web | ask | protect | quote | triggers | disarm
+enter | arm | add | exit | web | ask | protect | quote | triggers | disarm |
+arm-exit | exit-triggers | disarm-exit | paper-price | paths
 """
 from __future__ import annotations
 
@@ -11,7 +12,14 @@ import time
 import traceback
 
 from . import audit, auth
-from .commands.armed import cmd_arm, cmd_disarm, cmd_triggers
+from .commands.armed import (
+    cmd_arm,
+    cmd_arm_exit,
+    cmd_disarm,
+    cmd_disarm_exit,
+    cmd_exit_triggers,
+    cmd_triggers,
+)
 from .commands.daemon import cmd_login, cmd_monitor, cmd_start, cmd_stop
 from .commands.info import cmd_paths, cmd_positions, cmd_quote, cmd_status
 from .commands.integrations import cmd_ask, cmd_web
@@ -172,6 +180,21 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("disarm", help="cancel armed triggers (all, or one symbol)")
     sp.add_argument("symbol", nargs="?", default=None)
     sp.set_defaults(fn=cmd_disarm)
+
+    sp = sub.add_parser("arm-exit", help="arm an automatic exit, independent of the "
+                                          "resting SL — fires with no confirmation")
+    sp.add_argument("symbol")
+    sp.add_argument("--above", type=float, default=None, help="fire when price breaks above")
+    sp.add_argument("--below", type=float, default=None, help="fire when price breaks below")
+    sp.add_argument("--note", default="")
+    sp.set_defaults(fn=cmd_arm_exit)
+
+    sp = sub.add_parser("exit-triggers", help="list armed / fired exit triggers")
+    sp.set_defaults(fn=cmd_exit_triggers)
+
+    sp = sub.add_parser("disarm-exit", help="cancel armed exit triggers (all, or one symbol)")
+    sp.add_argument("symbol", nargs="?", default=None)
+    sp.set_defaults(fn=cmd_disarm_exit)
 
     args = p.parse_args(argv)
     # Every invocation is recorded, whoever started it. When the dashboard spawned this

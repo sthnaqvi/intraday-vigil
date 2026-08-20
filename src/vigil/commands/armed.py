@@ -79,3 +79,53 @@ def cmd_disarm(args) -> int:
     triggers_mod.save(all_t)
     print(f"Disarmed {n} trigger(s).")
     return 0
+
+
+def cmd_arm_exit(args) -> int:
+    """Arm an exit trigger on an existing (or expected) position, independent of its
+    resting SL. Fires by cancelling the SL and market-exiting the moment the level
+    breaks — no confirmation, no copy-paste, the daemon does it off the price feed."""
+    symbol = args.symbol.upper()
+    if (args.above is None) == (args.below is None):
+        print("Specify exactly one of --above / --below", file=sys.stderr)
+        return 2
+    side = "above" if args.above is not None else "below"
+    level = args.above if args.above is not None else args.below
+
+    all_t = triggers_mod.load_exit_triggers()
+    all_t.append(triggers_mod.ExitTrigger(
+        symbol=symbol, level=float(level), side=side, note=args.note or "",
+    ))
+    triggers_mod.save_exit_triggers(all_t)
+    print(f"Armed exit: {symbol} closes when price goes {side} {level} "
+          f"— fires automatically, no confirmation.")
+    if not _daemon_pid():
+        print("NOTE: daemon is not running — start it so the price feed watches this.")
+    else:
+        print("Restart the daemon (`vigil stop && vigil start`) to subscribe to this symbol.")
+    return 0
+
+
+def cmd_exit_triggers(args) -> int:
+    all_t = triggers_mod.load_exit_triggers()
+    if not all_t:
+        print("No exit triggers.")
+        return 0
+    print(f"{'SYMBOL':<12}{'SIDE':<7}{'LEVEL':>10}  {'STATUS':<10}DETAIL")
+    for t in all_t:
+        print(f"{t.symbol:<12}{t.side:<7}{t.level:>10.2f}  {t.status:<10}{t.detail}")
+    return 0
+
+
+def cmd_disarm_exit(args) -> int:
+    all_t = triggers_mod.load_exit_triggers()
+    n = 0
+    for t in all_t:
+        if t.status == triggers_mod.ARMED and (args.symbol is None
+                                               or t.symbol == args.symbol.upper()):
+            t.status = triggers_mod.CANCELLED
+            t.detail = "disarmed manually"
+            n += 1
+    triggers_mod.save_exit_triggers(all_t)
+    print(f"Disarmed {n} exit trigger(s).")
+    return 0

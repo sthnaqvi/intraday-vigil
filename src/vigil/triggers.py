@@ -65,6 +65,27 @@ class Trigger:
         return ltp > self.level if self.side == "above" else ltp < self.level
 
 
+@dataclass
+class ExitTrigger:
+    """A standing intent to close whatever position exists on `symbol`, independent of
+    its resting SL: "if RELIANCE trades below 1310, close it — take the profit / cut the
+    loss now, don't wait for the mechanical trail to catch up." Unlike an entry Trigger
+    this has no auto/alert split — arming an exit only makes sense if firing it also
+    closes the position, so it always does.
+    """
+    symbol: str
+    level: float               # price to break
+    side: str                  # "above" | "below"
+    note: str = ""
+    status: str = ARMED
+    armed_at: str = field(default_factory=lambda: clock.now_ist().isoformat())
+    fired_at: str | None = None
+    detail: str = ""
+
+    def crossed(self, ltp: float) -> bool:
+        return ltp > self.level if self.side == "above" else ltp < self.level
+
+
 # ---------- persistence ----------
 
 def load() -> list[Trigger]:
@@ -90,6 +111,43 @@ def save(triggers: list[Trigger]) -> None:
 
 def armed(triggers: list[Trigger]) -> list[Trigger]:
     return [t for t in triggers if t.status == ARMED]
+
+
+EXIT_TRIGGERS_FILE = config.DATA_DIR / "exit_triggers.json"
+
+
+def load_exit_triggers() -> list[ExitTrigger]:
+    if not EXIT_TRIGGERS_FILE.exists():
+        return []
+    try:
+        raw = json.loads(EXIT_TRIGGERS_FILE.read_text())
+    except (json.JSONDecodeError, OSError):
+        return []
+    out = []
+    for d in raw:
+        known = {k: v for k, v in d.items() if k in ExitTrigger.__dataclass_fields__}
+        out.append(ExitTrigger(**known))
+    return out
+
+
+def save_exit_triggers(triggers: list[ExitTrigger]) -> None:
+    config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+    tmp = EXIT_TRIGGERS_FILE.with_suffix(".tmp")
+    tmp.write_text(json.dumps([asdict(t) for t in triggers], indent=2))
+    os.replace(tmp, EXIT_TRIGGERS_FILE)
+
+
+def armed_exits(triggers: list[ExitTrigger]) -> list[ExitTrigger]:
+    return [t for t in triggers if t.status == ARMED]
+
+
+def all_armed_symbols() -> set[str]:
+    """Every symbol the price feed needs to watch — union of armed entry-trigger and
+    armed exit-trigger symbols. A symbol can carry an armed exit with no entry trigger
+    at all (the common case: arming an exit on a position that already exists), so
+    callers that only looked at `armed(load())` would silently never watch it."""
+    return ({t.symbol for t in armed(load())}
+            | {t.symbol for t in armed_exits(load_exit_triggers())})
 
 
 # ---------- entry gate ----------
@@ -215,8 +273,6 @@ class TriggerEngine:
         with self.lock:
             all_t = load()
             live = [t for t in armed(all_t) if t.symbol == symbol]
-            if not live:
-                return
             changed = False
             for t in live:
                 if not t.crossed(ltp):
@@ -241,3 +297,35 @@ class TriggerEngine:
                     self.on_fire(t)
             if changed:
                 save(all_t)
+
+            all_exits = load_exit_triggers()
+            live_exits = [t for t in armed_exits(all_exits) if t.symbol == symbol]
+            exits_changed = False
+            for et in live_exits:
+                if not et.crossed(ltp):
+                    continue
+                exits_changed = True
+                self.events.emit("EXIT_TRIGGER_HIT", symbol, level=et.level, ltp=ltp,
+                                 side=et.side, source=source)
+                try:
+                    closed = execution.close_position(self.broker, self.events, symbol)
+                except Exception as e:
+                    et.status = FAILED
+                    et.detail = f"close failed: {e!r}"
+                    self.events.emit("EXIT_TRIGGER_FAILED", symbol, error=repr(e))
+                    alert_dialog(f"{symbol}: EXIT TRIGGER hit {et.level} but the close "
+                                f"order FAILED.\n\n{e}\n\nThe resting SL, if any, still "
+                                "protects the position.")
+                    continue
+                if closed:
+                    et.status = FIRED
+                    et.fired_at = clock.now_ist().isoformat()
+                    et.detail = f"closed at ltp {ltp} ({source})"
+                    self.events.emit("EXIT_TRIGGER_FIRED", symbol, level=et.level, ltp=ltp)
+                    notify(f"{symbol} EXIT TRIGGER fired at {ltp} — position closed",
+                          sound=True)
+                else:
+                    et.status = CANCELLED
+                    et.detail = f"level hit at {ltp} ({source}) but no open position"
+            if exits_changed:
+                save_exit_triggers(all_exits)
