@@ -54,3 +54,34 @@ just at entry — re-reading the same setup criteria that justified the trade an
 plainly if they no longer hold. A stalled thesis isn't an automatic exit, but it has to
 enter the hold/exit conversation instead of going unmentioned. See
 `skill/intraday-trader/references/mode-monitor.md`.
+
+## A scheduled exit was disabled without deciding what replaces it
+
+The daemon's own scheduled square-off exists specifically to beat the exchange's own forced
+closure by a few minutes, so a controlled exit wins that race instead of an uncontrolled
+one. It was disabled mid-session, with the stated intent of letting profitable positions
+run longer toward the exchange's own later deadline — but no exit-trigger or manual-exit
+plan was put in place for the window that opened up. The result was operationally
+identical to doing nothing: the exchange's own forced closure ended up deciding the exit
+price a few minutes later, at whatever level the market happened to be at, while one
+position bled steadily and specifically during the unmanaged window with real money lost
+to it.
+
+**Rule:** disabling a scheduled exit is only half a decision. It must be paired with an
+explicit answer to "then what closes this, and when" — a specific trigger price or a firm
+manual-exit time, decided *before* the safety net comes down — never just the removal of
+the earlier exit with an assumption that things will work out. See
+`skill/intraday-trader/references/mode-monitor.md`.
+
+## Position sizing never reserved anything for its own transaction costs
+
+Sizing has always computed quantity from the full amount of available margin, with nothing
+held back for the brokerage, statutory, and exchange charges that get deducted from free
+cash rather than from the margin blocked for the position itself. This produced a real
+insufficient-funds notification from the broker when an exit fired against an account with
+no cash cushion left to cover its own charges.
+
+**Rule:** a fixed reserve — held back from the sizing calculation on every slot, every
+time — must exist before quantity is computed, specifically to cover the transaction costs
+of the exit that will eventually have to fire. See `docs/sl-rules.md`'s position-sizing
+section.

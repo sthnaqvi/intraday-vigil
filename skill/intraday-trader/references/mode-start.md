@@ -19,6 +19,26 @@ re-offer the link if the user later wants MCP-only conveniences.
 
 Expect the MCP token to die roughly hourly. That is normal and is not a trading incident.
 
+## Step 1b — Verify sector-universe.md's tokens (once per day, before Step 4 needs them)
+
+NSE instrument tokens drift — corporate actions, relistings, and periodic instrument-master
+reissues change them, and `sector-universe.md` is hand-maintained, not live-fetched. A stale
+token doesn't always error: it can silently return real-looking data for a *different*
+instrument (this happened live on 2026-08-20 — BAJAJ-AUTO's stale token returned a coherent
+daily-candle series for an unrelated ~₹2000 stock, which would have corrupted that sector's
+trend score if it hadn't been caught by chance). Run this once, in the background, before
+Step 4 needs the tokens — it doesn't block anything else in Step 1-3:
+
+```
+.venv/bin/python scripts/verify_sector_universe.py --fix
+```
+
+Report any mismatches it fixed. If it reports symbols "not found in the live instrument
+master," that's a rename or delisting, not a token drift — resolve the correct current
+symbol by hand (see the script's own history for the TATAMOTORS→TMPV and
+CHAMBAL→CHAMBLFERT precedent) rather than re-running with `--fix`, which only corrects
+token *values* for symbols that still exist under the same name.
+
 ## Step 2 — Automatic opening bias (no user input needed)
 
 Run in parallel:
@@ -199,11 +219,22 @@ For each selected stock:
    ```
    capital        = available margin (check for the field that actually holds live funds)
    margin_share   = capital allocated to this slot   # split across open + armed slots
-   qty            = floor(margin_share / (entry / leverage))   # e.g. MIS ≈ 5x on NSE
+   sizing_capital = margin_share − transaction_cost_buffer   # never size off 100% free margin —
+                                                               # brokerage/STT/exchange charges
+                                                               # come out of free cash, not the
+                                                               # blocked margin; see sl-rules.md
+   qty            = floor(sizing_capital / (entry / leverage))   # e.g. MIS ≈ 5x on NSE
    risk_per_share = abs(entry − final_sl_price)
    ```
    Report the resulting risk in currency plainly (`qty × risk_per_share`) so the size is
    never a surprise — but the sizing input is available margin, not a risk budget.
+
+   **If a broker rejects an order for an unexpected margin amount, measure before
+   theorizing.** Call the broker's own margin-calculator endpoint for that exact order
+   first — don't guess at a leverage or policy explanation and resize based on the guess.
+   A misdiagnosed rejection on 2026-08-20 led to a position running at under a fifth of the
+   size the (unused, available) calculator actually supported — see
+   `docs/incidents/2026-08-20-session.md`.
 
    **Allocation:** do not dump the full budget into one name while another trigger is
    armed. Weight the confirmed setup and reserve for armed slots; ask the user if the

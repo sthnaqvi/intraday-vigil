@@ -12,18 +12,18 @@ Use these tokens for batch `get_quotes()` calls. Compute % from open per stock, 
 - NSE:INFY       (token 408065)
 - NSE:TCS        (token 2953217)
 - NSE:WIPRO      (token 969473)
-- NSE:HCLTECH    (token 1207553)
+- NSE:HCLTECH    (token 1850625)
 
 ## Auto
 - NSE:MARUTI     (token 2815745)
-- NSE:TATAMOTORS (token 884737)
-- NSE:BAJAJ-AUTO (token 4268801)
+- NSE:TMPV       (token 884737)  ← Tata Motors Passenger Vehicles (post-demerger; commercial-vehicle arm is TMCV)
+- NSE:BAJAJ-AUTO (token 4267265)
 - NSE:EICHERMOT  (token 232961)
 
 ## Pharma
 - NSE:SUNPHARMA  (token 857857)
 - NSE:DRREDDY    (token 225537)
-- NSE:CIPLA      (token 177921)
+- NSE:CIPLA      (token 177665)
 
 ## FMCG
 - NSE:HINDUNILVR (token 356865)
@@ -41,23 +41,28 @@ Use these tokens for batch `get_quotes()` calls. Compute % from open per stock, 
 - NSE:BPCL       (token 134657)
 
 ## Realty
-- NSE:DLF        (token 3771073)
-- NSE:GODREJPROP (token 3401473)
-- NSE:OBEROIRLTY (token 1906945)
+- NSE:DLF        (token 3771393)
+- NSE:GODREJPROP (token 4576001)
+- NSE:OBEROIRLTY (token 5181953)
 
 ## Aviation
 - NSE:INDIGO     (token 2865921)  ← InterGlobe Aviation
-- NSE:SPICEJET   (token 807553)
+<!-- SPICEJET is gone from the NSE mainboard as of 2026-08 — not found under any symbol
+     variant in the live instrument master (delisted/restructured). No clean airline
+     replacement exists; GMRAIRPORT is airport infrastructure, a different business, not
+     substituted here without a decision. Aviation is a 1-stock sector until this is
+     resolved — treat its ranking as lower-confidence than sectors with 3+ names. -->
+
 
 ## Chemical Fertiliser
 - NSE:DEEPAKFERT (token 211713)
-- NSE:COROMANDEL (token 203265)
-- NSE:CHAMBAL    (token 163073)
+- NSE:COROMANDEL (token 189185)
+- NSE:CHAMBLFERT (token 163073)  ← renamed from CHAMBAL
 
 ## Renewable Energy
 - NSE:ADANIGREEN (token 912129)
-- NSE:TATAPOWER  (token 877473)
-- NSE:TORNTPOWER (token 539937)
+- NSE:TATAPOWER  (token 877057)
+- NSE:TORNTPOWER (token 3529217)
 
 ---
 

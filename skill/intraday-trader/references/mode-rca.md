@@ -28,4 +28,38 @@ SL lifecycle execution (from events, not memory), position sizing discipline, ma
 alignment, reassess quality, exit execution, phase transitions, overall discipline.
 Total /50.
 
-Output a markdown report flagging the top 3 mistakes to avoid tomorrow.
+Output a markdown report flagging the mistakes worth fixing before the next session — most
+sessions surface 2-3, but report however many the evidence actually supports, not a fixed
+count padded out or trimmed to fit "3."
+
+## Where this lives — same private/public split as the incident log
+
+**Save the rendered report to `private/rca/<YYYY-MM-DD>.md` in the repo, not just as a chat
+attachment.** A report only delivered as a file in a coding-session send is easy to lose
+track of and isn't visible to `grep`/`find` in the repo the way everything else this skill
+touches is. `private/` is gitignored (see `.gitignore`) — RCAs carry the same real
+dates/₹-figures as `private/incidents/verbatim-log.md`, so they get the same treatment:
+real numbers live in `private/`, nothing with a specific ₹ amount or date gets published.
+
+**If the session surfaced anything worth remembering beyond "today's numbers" — a bug, a
+process gap, a decision that cost money — that's not what the RCA file is for on its own.**
+Add it as a new numbered entry to `private/incidents/verbatim-log.md` (continue the
+existing numbering, keep the real figures), then write a scrubbed version (no exact dates,
+no exact ₹ amounts, no ticker names if the existing files' style omits them) as a new `##`
+section appended to whichever *existing* `docs/incidents/*.md` file matches its theme.
+**Don't trust a theme list copied here going stale — run `ls docs/incidents/` and read each
+file's own opening paragraph (every one states its theme in the first few lines) to decide
+the match, since a file can get added after this list was last written.** As of this
+writing the themes are:
+- `verification-gaps.md` — something *looked* fine without being checked against ground
+  truth (an order accepted, a token that returned data, an unverified assumption)
+- `discipline-and-process.md` — a trading/process decision, not a code bug
+- `trail-and-sl-lifecycle.md` — SL/phase mechanics specifically
+- `reference-data-drift.md` — external reference data (broker identifiers, symbols) gone
+  stale since it was last written, as opposed to a code path that never checked itself
+
+Only create a new thematic file if the finding genuinely doesn't fit any existing one —
+check the actual files first, not just this list. If you do create one, add it to the list
+above in the same edit, so the list and the directory never drift apart again. **Never
+create a new dated file under `docs/incidents/` per session** — that breaks the by-theme
+structure and stops findings from accumulating anywhere consistent.

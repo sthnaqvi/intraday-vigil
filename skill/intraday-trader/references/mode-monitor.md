@@ -88,3 +88,14 @@ The daemon fires its configured time alerts, sets `no_new_entries` after the cut
 force-squares everything near the close on its own. The skill does not schedule its own
 alerts — but when rendering a snapshot after the cutoff, remind the user the entry gate is
 closed.
+
+**If the user wants to stop the daemon's own squareoff to let a position run longer, that
+request is only half-answered by stopping the daemon.** `SQUAREOFF_AT` exists specifically
+to beat the broker's own force-square by a few minutes so a controlled exit wins that race
+instead of the exchange's forced one — disabling it without arming a replacement (a specific
+exit-trigger price, or a firm manual-exit time, decided *before* the daemon comes back down)
+just hands the exit to the broker's forced closure a few minutes later, at whatever price it
+happens to be. That's not "letting it run" in any meaningful sense — it's the same uncontrolled
+outcome, just delayed. Cost a real ₹1,046 on 2026-08-20 doing exactly this — see
+`docs/incidents/2026-08-20-session.md`. Always pair "stop the scripted exit" with an explicit
+answer to "then what closes it, and when."

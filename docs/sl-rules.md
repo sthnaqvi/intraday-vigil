@@ -90,6 +90,18 @@ apply after the base quantity is computed: commonly half-size in an elevated-vol
 band, quarter-size above that, with an additional halving on a scheduled macro event day
 (central bank announcements etc).
 
+**Reserve a transaction-cost buffer — never size against 100% of available capital.**
+Brokerage, STT, and exchange charges are deducted from free cash, not from the margin
+blocked for the position, so sizing right up to the exact available-margin figure leaves
+nothing to cover the exit that will eventually have to fire (the SL, the square-off, or a
+manual close) — a real insufficient-funds notification from this exact gap forced this rule
+in (see `docs/incidents/2026-08-20-session.md`). Hold back a fixed reserve — a flat rupee
+amount comfortably above a few round-trips' worth of charges, or a small percentage (1% is a
+reasonable default) — before computing `qty`, on every slot, every time:
+```
+sizing_capital = margin_allocated_to_this_slot - transaction_cost_buffer
+```
+
 ## Order-quantity verification, every cycle
 
 The daemon re-reads every tracked position's SL order every cycle and compares its actual

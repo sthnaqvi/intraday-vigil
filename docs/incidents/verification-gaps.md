@@ -64,3 +64,69 @@ stop.
 (`src/vigil/monitor.py`) — a position with no resting stop is at least as urgent as one that
 is merely close to its stop, so it gets checked (and re-alarmed) at the same faster cadence,
 cutting the detection-to-alarm latency roughly in half for exactly this scenario.
+
+## An order-placement parameter was present on two call sites and missing on a third
+
+The broker adapter has three near-identical order-construction methods. Two of them passed
+a required protection parameter the exchange demands for this order type; the third —
+placing a fresh stop — simply didn't, no functional reason, just an omission that nothing
+caught because the three methods were never compared against each other or exercised
+side-by-side in a test. An entry filled correctly, then its stop was rejected outright by
+the exchange, leaving a live position with no protection until it was noticed and a stop
+placed by hand.
+
+**Fix:** the missing parameter was added to the third method, and the fix was verified
+against the full test suite rather than trusted on inspection alone.
+
+## A single hardcoded rounding constant was applied to every instrument
+
+Stop prices were rounded to one hardcoded tick size, applied uniformly. The exchange's real
+tick size varies per instrument — most trade at one common value, but a meaningful minority
+trade at a different one — and rounding to the wrong tick produces a price the exchange
+rejects outright. An entry filled, then its stop was rejected for exactly this reason,
+leaving the same class of gap as above: a live position with no protection until manually
+placed and the underlying constant fixed.
+
+**Fix:** tick size is now looked up per symbol from the broker's own instrument master
+(cached once per day) rather than assumed from a single project-wide default, threaded
+through every call site that rounds a stop price. Regression test covers a stop computed
+for a non-default-tick instrument and asserts the result is actually a valid multiple of
+that instrument's real tick — the earlier hardcoded version would have silently produced an
+invalid price for exactly this case without the test ever failing on the common-tick
+instruments it was originally written against.
+
+## An unexpected broker rejection was theorized about instead of measured
+
+An order was rejected for a margin amount well outside what a normal calculation predicted.
+Instead of calling the broker's own margin-calculator endpoint for that exact order — which
+was available the entire time — a theory was formed about *why* (a leverage policy change)
+and a position was resized down based on the guess, not a measurement. The guess was wrong;
+correcting it required being shown independent evidence twice before the arithmetic was
+actually reconciled against the calculator's real output. The concrete cost: a position ran
+undersized by several multiples of what the (unused) calculator would have supported, for
+the rest of the session.
+
+**Fix (process, not code):** when a broker rejects an order for an unexpected reason, call
+its own margin/order-validation calculator for that exact order *before* forming any theory
+about the cause — measure first, theorize never. No exceptions for time pressure; the
+calculator call costs seconds, a wrong theory costs position size for the rest of the
+session.
+
+## A quantity decrease and a quantity increase were treated as the same case
+
+Reconciliation had one branch for "a tracked position's quantity changed," written for the
+case of adding to a position — which needs its entry price and R recomputed. A quantity
+*decrease* (a partial exit, placed outside the normal order-placement path) fell into the
+identical branch and was silently absorbed: the smaller quantity was recorded, and nothing
+else happened. No profit-and-loss was ever recorded for the shares that left. The daemon's
+own realized-P&L ledger only ever reflected each symbol's *final* close, computed from a
+blended average price applied against the wrong (already-reduced) quantity — undercounting
+the true session P&L by more than half.
+
+**Fix:** a quantity decrease that doesn't go all the way to zero is now its own case —
+realized P&L is computed for exactly the quantity that left, using the broker's own current
+blended sell/buy price, and recorded as its own ledger entry, additive with whatever the
+eventual full close records later. The remaining position's phase and breakeven history is
+left untouched, since a partial exit isn't a new trade. Three regression tests cover the
+P&L being recorded correctly, phase state surviving the partial, and a later full close not
+double-counting quantity already recorded by the partial.
