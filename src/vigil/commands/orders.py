@@ -5,7 +5,7 @@ import json
 import sys
 import time
 
-from .. import config, execution, rules
+from .. import config, execution, levels, rules
 from .. import state as state_mod
 from .. import triggers as triggers_mod
 from ..monitor import MonitorLoop
@@ -76,8 +76,10 @@ def cmd_enter(args) -> int:
         pass
 
     if not args.yes:
+        tick = levels.tick_sizes(broker, [t.symbol])[t.symbol]
         est_sl = rules.initial_sl_price(ltp, sl_pct, direction,
-                                        [v for v in (args.pdh, args.pdl) if v]) if ltp else 0.0
+                                        [v for v in (args.pdh, args.pdl) if v],
+                                        tick) if ltp else 0.0
         print(f"{t.symbol} {direction.value} qty {args.qty} @ ~{ltp} — SL ~{est_sl} "
               f"({sl_pct:.2%}), risk ~Rs {abs(ltp - est_sl) * args.qty:,.0f}")
         if input("Place this order? [y/N] ").strip().lower() != "y":
@@ -225,7 +227,8 @@ def cmd_protect(args) -> int:
         return 3
 
     lvls = [v for v in (seed.get("pdh"), seed.get("pdl")) if v]
-    trigger = args.trigger or rules.initial_sl_price(entry, sl_pct, direction, lvls)
+    tick = levels.tick_sizes(broker, [symbol])[symbol]
+    trigger = args.trigger or rules.initial_sl_price(entry, sl_pct, direction, lvls, tick)
 
     if not args.yes:
         print(f"{symbol} {direction.value} {qty} @ {entry:.2f} — place SL-M at {trigger} "

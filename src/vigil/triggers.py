@@ -24,7 +24,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass, field
 from typing import Any
 
-from . import clock, config, execution, rules
+from . import clock, config, execution, levels, rules
 from .events import EventLog
 from .guard import GuardedBroker
 from .notify import alert_dialog, notify
@@ -202,7 +202,8 @@ def execute(trigger: Trigger, broker: GuardedBroker, events: EventLog, session: 
         pass
 
     guard_levels = [v for v in (trigger.pdh, trigger.pdl) if v]
-    sl_price = rules.initial_sl_price(fill, trigger.sl_pct, trigger.dir, guard_levels)
+    tick = levels.tick_sizes(broker, [trigger.symbol])[trigger.symbol]
+    sl_price = rules.initial_sl_price(fill, trigger.sl_pct, trigger.dir, guard_levels, tick)
     try:
         sl_id = execution.place_sl(broker, trigger.symbol, trigger.dir, sl_price, trigger.qty)
         trigger.sl_order_id = sl_id

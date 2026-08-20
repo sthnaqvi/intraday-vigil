@@ -37,6 +37,40 @@ def instrument_tokens(broker: GuardedBroker, symbols: list[str]) -> dict[str, in
     return {s: mapping[s] for s in symbols if s in mapping}
 
 
+def _tick_cache_path():
+    return config.DATA_DIR / f"tick-sizes-{clock.now_ist().date().isoformat()}.csv"
+
+
+def tick_sizes(broker: GuardedBroker, symbols: list[str]) -> dict[str, float]:
+    """NSE tradingsymbol -> tick_size, cached to a daily CSV.
+
+    config.NSE_TICK (0.05) is only NSE's *default* tick — plenty of scrips (DRREDDY and
+    other pharma names included) trade in 0.10 ticks instead. Rounding an SL to the wrong
+    tick produces a price the exchange rejects outright ('Kindly enter trigger price in
+    the multiple of tick size for this script'), discovered when a live DRREDDY entry
+    filled with its SL order failing on exactly this. Every caller that used to round to
+    the hardcoded default must look the real tick up per symbol instead.
+
+    Falls back to config.NSE_TICK for a symbol not found in the instrument master
+    (should not happen for a valid NSE equity symbol, but a stale/unrecognised symbol
+    must not crash the SL leg — better a possibly-wrong-tick order than none at all)."""
+    path = _tick_cache_path()
+    mapping: dict[str, float] = {}
+    if path.exists():
+        with path.open() as f:
+            for row in csv.reader(f):
+                mapping[row[0]] = float(row[1])
+    else:
+        config.DATA_DIR.mkdir(parents=True, exist_ok=True)
+        rows = broker.instruments("NSE")
+        with path.open("w", newline="") as f:
+            writer = csv.writer(f)
+            for r in rows:
+                writer.writerow([r["tradingsymbol"], r["tick_size"]])
+                mapping[r["tradingsymbol"]] = float(r["tick_size"])
+    return {s: mapping.get(s, config.NSE_TICK) for s in symbols}
+
+
 def fetch_pdh_pdl(broker: GuardedBroker, symbol: str, token: int,
                   events: EventLog) -> tuple[float, float] | None:
     """Previous trading day's high/low from daily candles. None if unavailable."""

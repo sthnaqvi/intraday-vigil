@@ -202,6 +202,8 @@ class MonitorLoop:
         seeds = state_mod.load_risk_seeds()
         positions_day = self.broker.positions_day()
         orders = self.broker.orders()
+        ticks = levels.tick_sizes(
+            self.broker, list(self.session.positions.keys()) + list(seeds.keys()))
 
         # 1. Reconcile broker truth vs tracked state
         report = state_mod.reconcile(self.session, positions_day, orders, seeds)
@@ -243,7 +245,8 @@ class MonitorLoop:
             if "sl_pct" in seed:
                 sl_pct = float(seed["sl_pct"])
                 lvls = [v for v in (seed.get("pdh"), seed.get("pdl")) if v]
-                trigger = rules.initial_sl_price(entry, sl_pct, direction, lvls)
+                trigger = rules.initial_sl_price(entry, sl_pct, direction, lvls,
+                                                 ticks.get(symbol, config.NSE_TICK))
                 new_id = execution.place_sl(self.broker, symbol, direction, trigger, qty)
                 self.session.positions[symbol] = TrackedPosition(
                     symbol=symbol, direction=direction.value, entry=entry, qty=qty,
@@ -269,7 +272,8 @@ class MonitorLoop:
             if config.AUTO_REPROTECT and tp is not None:
                 seed = seeds.get(symbol, {})
                 lvls = [v for v in (seed.get("pdh"), seed.get("pdl")) if v]
-                trigger = rules.initial_sl_price(tp.entry, tp.sl_pct, tp.dir, lvls)
+                trigger = rules.initial_sl_price(tp.entry, tp.sl_pct, tp.dir, lvls,
+                                                 ticks.get(symbol, config.NSE_TICK))
                 try:
                     new_id = execution.place_sl(self.broker, symbol, tp.dir, trigger, tp.qty)
                 except Exception as e:
@@ -369,13 +373,14 @@ class MonitorLoop:
 
                 lvls = self._levels_for(tp, q)
                 intent = None
+                tick = ticks.get(tp.symbol, config.NSE_TICK)
                 if tp.phase >= 2 and not tp.breakeven_done:
                     intent = rules.breakeven_decision(
-                        tp.entry, tp.sl_price, tp.dir, lvls, tp.sl_order_id, tp.qty)
+                        tp.entry, tp.sl_price, tp.dir, lvls, tp.sl_order_id, tp.qty, tick)
                 elif tp.phase == 3:
                     intent = rules.trail_decision(
                         ltp, tp.trail_pct, tp.sl_price, tp.dir, lvls, tp.sl_order_id, tp.qty,
-                        require_min_move=tp.trail_started)
+                        require_min_move=tp.trail_started, tick=tick)
                 if intent:
                     self._execute_intent(tp, intent, q)
 

@@ -55,6 +55,7 @@ class KiteAdapter:
             variety="regular", exchange=exchange, tradingsymbol=symbol,
             transaction_type=transaction_type, quantity=quantity, product="MIS",
             order_type="SL-M", trigger_price=trigger_price,
+            market_protection=config.MARKET_PROTECTION_PCT,
         )
 
     def modify_stop_order(self, order_id: str, trigger_price: float, quantity: int) -> str:

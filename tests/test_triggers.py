@@ -160,6 +160,26 @@ def test_execute_derives_sl_from_actual_fill_not_the_trigger_level(tmp_path, mon
     assert 1330 < sl < 1340
 
 
+def test_execute_rounds_sl_to_the_symbols_own_tick_not_the_nse_default(tmp_path, monkeypatch):
+    """DRREDDY (and other 0.10-tick scrips) must not get an SL rounded to the 0.05
+    default: the exchange rejects a trigger price that isn't a multiple of the script's
+    own tick ('Kindly enter trigger price in the multiple of tick size for this script'),
+    which is exactly what a live DRREDDY entry hit — filled, then the SL leg failed."""
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 20, 12, 43, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_tick_size("DRREDDY", 0.10)
+    kite.set_quote("DRREDDY", 1179.65)
+    # raw SL 1179.65 * 0.99 = 1167.8535 -> rounds to 1167.85 under the 0.05 default
+    # (not a multiple of 0.10) but must round to 1167.80 under DRREDDY's real tick.
+    t = T.Trigger("DRREDDY", "LONG", 1179.0, "above", 60, 0.01, auto=True)
+
+    assert T.execute(t, broker, events, FakeSession(), 1179.65) is True
+    sl = kite.place_calls[1]["trigger_price"]
+    assert round(sl / 0.10, 6) % 1 == 0, f"sl={sl} is not a multiple of DRREDDY's 0.10 tick"
+    assert sl == 1167.80
+
+
 def test_sl_failure_leaves_a_seed_so_the_daemon_can_recover(tmp_path, monkeypatch):
     """Entry filled but the SL leg failed: the position is open and unprotected."""
     monkeypatch.setattr(T.clock, "now_ist",

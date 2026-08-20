@@ -84,11 +84,12 @@ def breakeven_decision(
     levels: list[float],
     order_id: str,
     quantity: int,
+    tick: float = config.NSE_TICK,
 ) -> ModifyIntent | None:
     """Phase 2 one-shot: SL to entry (stop-hunt guarded, tick-rounded).
     Caller gates this on `not breakeven_done`."""
     guarded, applied = apply_stop_hunt_guard(entry, levels, direction)
-    new_sl = round_to_tick_favor(guarded, direction)
+    new_sl = round_to_tick_favor(guarded, direction, tick)
     if not _is_better(new_sl, current_sl, direction):
         return None
     return ModifyIntent(order_id, new_sl, quantity, "breakeven_+1R", applied)
@@ -104,6 +105,7 @@ def trail_decision(
     quantity: int,
     min_move: float = config.TRAIL_MIN_MOVE,
     require_min_move: bool = True,
+    tick: float = config.NSE_TICK,
 ) -> ModifyIntent | None:
     """Phase 3 mechanical trail at trail_pct (= 2 x sl_pct) from LTP.
     Ratchet only: modify iff better than current SL AND moved > min_move.
@@ -117,7 +119,7 @@ def trail_decision(
     else:
         raw = ltp * (1 + trail_pct)
     guarded, applied = apply_stop_hunt_guard(raw, levels, direction)
-    new_sl = round_to_tick_favor(guarded, direction)
+    new_sl = round_to_tick_favor(guarded, direction, tick)
     if not _is_better(new_sl, current_sl, direction):
         return None
     if require_min_move and abs(new_sl - current_sl) / current_sl <= min_move:
@@ -126,11 +128,11 @@ def trail_decision(
 
 
 def initial_sl_price(entry: float, sl_pct: float, direction: Direction,
-                     levels: list[float]) -> float:
+                     levels: list[float], tick: float = config.NSE_TICK) -> float:
     """Fresh SL placement (discovery of an unprotected position, or reject->replace)."""
     raw = entry * (1 - sl_pct) if direction == Direction.LONG else entry * (1 + sl_pct)
     guarded, _ = apply_stop_hunt_guard(raw, levels, direction)
-    return round_to_tick_favor(guarded, direction)
+    return round_to_tick_favor(guarded, direction, tick)
 
 
 def near_sl(ltp: float, trigger: float, threshold: float = config.NEAR_SL_PCT) -> bool:

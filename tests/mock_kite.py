@@ -11,6 +11,7 @@ class MockKite:
         self.modify_calls: list[dict] = []
         self.place_calls: list[dict] = []
         self.cancel_calls: list[str] = []
+        self._tick_sizes: dict[str, float] = {}
         self.fail_next_modify: Exception | None = None
         self.reject_order_on_failed_modify = True
         # Kite accepts the modify (HTTP 200) but the exchange rejects it, so the resting
@@ -30,6 +31,13 @@ class MockKite:
             "ohlc": {"open": open_ or ltp, "high": high or ltp,
                      "low": low or ltp, "close": close or ltp},
         }
+
+    def set_tick_size(self, symbol: str, tick: float):
+        """Script a non-default exchange tick for a symbol (most NSE equities are 0.05;
+        some — DRREDDY included — trade in 0.10). Unscripted symbols are simply absent
+        from instruments(), so levels.tick_sizes() falls back to config.NSE_TICK, same
+        as every test written before per-symbol ticks existed."""
+        self._tick_sizes[symbol] = tick
 
     def set_position(self, symbol: str, quantity: int, buy_price: float = 0.0,
                      sell_price: float = 0.0):
@@ -84,6 +92,12 @@ class MockKite:
 
     def orders(self):
         return [dict(o) for o in self._orders]
+
+    def instruments(self, exchange="NSE"):
+        return [
+            {"tradingsymbol": sym, "instrument_token": 900000 + i, "tick_size": tick}
+            for i, (sym, tick) in enumerate(self._tick_sizes.items())
+        ]
 
     def modify_order(self, variety, order_id, trigger_price=None, quantity=None, **kw):
         self.modify_calls.append(
