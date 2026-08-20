@@ -136,6 +136,29 @@ def test_unprotected_position_gets_sl_from_seed(tmp_path):
     assert tp.sl_price == 792.0 and tp.sl_pct == 0.01
 
 
+def test_unprotected_tracked_position_forces_the_fast_cycle_even_when_price_is_far_from_sl(
+        tmp_path):
+    """The 2026-08-18 incident: a resting SL got cancelled outside the daemon while price
+    sat well clear of it, so the old any_near check (price-proximity only) never sped the
+    daemon up — the naked position was detected at the slow 150s cadence the whole time.
+    Missing protection must force the fast cycle on its own, independent of price."""
+    from vigil import config
+
+    kite = MockKite()
+    oid = seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()  # first cycle: discovers + tracks the position, SL intact
+
+    kite.cancel_order("regular", oid)  # simulate the SL vanishing outside the daemon
+    kite.set_quote("INDIGO", 4150.0)   # price unchanged — nowhere near the old SL
+    interval = loop.cycle()
+
+    assert interval == config.CYCLE_NEAR_SL_S, (
+        "an unprotected position must force the fast cycle even when price never moved"
+    )
+
+
 def test_squareoff_at_1510_cancels_and_exits_everything(tmp_path):
     kite = MockKite()
     oid = seed_indigo_long(kite)

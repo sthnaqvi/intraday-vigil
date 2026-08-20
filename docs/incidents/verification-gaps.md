@@ -49,3 +49,18 @@ deliberately does *not* auto-replace a stop that vanishes (`AUTO_REPROTECT` defa
 re-placing it would override a decision the user just made. Detection and alarm are
 unconditional; re-placement is a decision the daemon leaves to the human, or to an explicit
 `vigil protect SYMBOL`.
+
+## Fast alarms didn't mean fast cycles
+
+The alarm above fires every cycle, but "every cycle" still meant the slow ~150s cadence for
+a position whose price sat nowhere near its (already-vanished) stop — the cycle-speed check
+only ever looked at price proximity to the last-known trigger, with no notion that the stop
+itself might be entirely missing. A lost stop that got flagged repeatedly still sat naked
+for several cycles' worth of real time before anyone acted, purely because detection itself
+was running at normal speed rather than the fast tier reserved for a position "near" its
+stop.
+
+**Fix:** missing protection now forces the fast cycle on its own, independent of price
+(`src/vigil/monitor.py`) — a position with no resting stop is at least as urgent as one that
+is merely close to its stop, so it gets checked (and re-alarmed) at the same faster cadence,
+cutting the detection-to-alarm latency roughly in half for exactly this scenario.

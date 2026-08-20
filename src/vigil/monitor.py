@@ -380,7 +380,6 @@ class MonitorLoop:
                     self._execute_intent(tp, intent, q)
 
                 is_near = rules.near_sl(ltp, tp.sl_price)
-                any_near = any_near or is_near
                 unrealized = round(
                     (ltp - tp.entry) * tp.qty if tp.dir == Direction.LONG
                     else (tp.entry - ltp) * tp.qty, 2)
@@ -390,6 +389,11 @@ class MonitorLoop:
                 protected = (sl_now is not None
                              and sl_now.status in state_mod.PENDING_STATUSES
                              and sl_now.quantity == tp.qty)
+                # An unprotected position is at least as urgent as a "near SL" one — the
+                # 2026-08-18 incident sat naked for 37 minutes partly because detection ran
+                # at the slow 150s cadence the whole time, since price never got near the
+                # (already-cancelled) stop. Missing protection forces the fast cycle too.
+                any_near = any_near or is_near or not protected
                 position_views.append(
                     {"symbol": tp.symbol, "direction": tp.direction, "entry": tp.entry,
                      "qty": tp.qty, "ltp": ltp, "profit_r": round(pr, 2), "phase": tp.phase,
@@ -473,7 +477,7 @@ class MonitorLoop:
             return
         try:
             from . import triggers as triggers_mod
-            want = {t.symbol for t in triggers_mod.armed(triggers_mod.load())}
+            want = triggers_mod.all_armed_symbols()
             have = set(getattr(self.feed, "token_to_symbol", {}).values())
             if want == have:
                 return
@@ -493,7 +497,7 @@ class MonitorLoop:
             return
         try:
             from . import triggers as triggers_mod
-            symbols = sorted({t.symbol for t in triggers_mod.armed(triggers_mod.load())})
+            symbols = sorted(triggers_mod.all_armed_symbols())
             self._polling_feed.poll(symbols, self.trigger_engine.on_price)
         except Exception as e:
             self.events.emit("WARNING", message=f"trigger poll failed: {e!r}")
@@ -517,7 +521,7 @@ class MonitorLoop:
             return
         try:
             from . import triggers as triggers_mod
-            symbols = sorted({t.symbol for t in triggers_mod.armed(triggers_mod.load())})
+            symbols = sorted(triggers_mod.all_armed_symbols())
             if not symbols:
                 return
             feed = KiteTickerFeed(self.broker, self.events)
