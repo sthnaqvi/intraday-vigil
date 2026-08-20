@@ -1,8 +1,11 @@
 # MODE: MONITOR
 
-**No polling loop. No SL modifications.** The daemon runs its own cycle, moves SLs, fixes
-qty mismatches, fires time alerts, and squares off near the close on its own. MONITOR is an
-on-demand *read* of the daemon's snapshot whenever the user asks.
+**No manual polling loop to re-implement SL lifecycle logic. No SL modifications.** The
+daemon runs its own cycle, moves SLs, fixes qty mismatches, fires time alerts, and squares
+off near the close on its own — a competing manual loop watching for the same conditions
+would race it, not help it. MONITOR is an on-demand *read* of the daemon's snapshot whenever
+the user asks. (Polling for other reasons — e.g. confirming an action landed — is fine; see
+`SKILL.md` for how to do it correctly, since a broken poll condition fails silently.)
 
 ## Procedure
 

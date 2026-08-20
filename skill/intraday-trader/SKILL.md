@@ -39,6 +39,17 @@ Orders, armed triggers, and the whole SL lifecycle run on the daemon's own token
 lasts the trading day. MCP is a convenience for research reads only. If MCP is down, say
 so and keep working — trading is unaffected.
 
+Polling for a real reason — waiting on a slow external process, confirming a change landed —
+is fine; the daemon's own cycle doesn't make watching wrong. Two things that go wrong with a
+poll, worth getting right rather than avoiding polling itself: never `grep` `vigil status
+--json`'s output for more than one field, since it pretty-prints one key per line and a
+same-line multi-field pattern can never match — it fails *silently*, no error, just a
+condition that's never true; parse it with `python3 -c "import json,sys; ..."` or `jq`
+instead. And give a background poll a bound (a max iteration count or timeout), so a
+condition that's wrong for some other reason surfaces as a timeout rather than spinning
+unnoticed — one loop with a broken grep condition ran for 4+ hours in a live session before
+anyone noticed it was checking nothing.
+
 Quotes without MCP: `vigil quote SYMBOL [SYMBOL...]`
 
 ## Division of labour
