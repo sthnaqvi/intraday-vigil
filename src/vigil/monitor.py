@@ -213,6 +213,14 @@ class MonitorLoop:
                 self.events.emit("ORPHAN_SL_CANCELLED", data_order_id=oid)
             except Exception as e:
                 self.events.emit("WARNING", message=f"orphan SL cancel failed: {e}")
+        for rec in report.partial_exits:
+            self.events.emit("PARTIAL_EXIT", rec["symbol"],
+                            **{k: v for k, v in rec.items() if k != "symbol"})
+            sign = "+" if rec["realized_pnl"] >= 0 else ""
+            notify(
+                f"{rec['symbol']} partial exit: {rec['qty']} @ {rec['exit_price']} — "
+                f"{sign}Rs {rec['realized_pnl']} ({rec['realized_r']}R) recorded"
+            )
         for rec in report.exited:
             self.events.emit("SL_HIT", rec["symbol"],
                             **{k: v for k, v in rec.items() if k != "symbol"})

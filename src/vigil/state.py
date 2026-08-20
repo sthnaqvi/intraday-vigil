@@ -158,6 +158,12 @@ class ReconcileReport:
     unprotected: list[str] = field(default_factory=list)
     warnings: list[str] = field(default_factory=list)
     refreshed: list[dict[str, Any]] = field(default_factory=list)
+    # A tracked position's quantity dropped but didn't go to zero — a manual partial exit
+    # (placed outside the daemon, e.g. via MCP) that used to vanish into the qty-refresh
+    # branch with zero realized P&L recorded. See docs/incidents/2026-08-20-session.md:
+    # today's `realized_pnl_today` undercounted the true session P&L by more than half
+    # because of exactly this gap.
+    partial_exits: list[dict[str, Any]] = field(default_factory=list)
     # Tracked positions whose SL order is no longer resting at the exchange. Distinct from
     # `unprotected`, which only ever covered positions seen for the FIRST time.
     lost_sl: list[dict[str, Any]] = field(default_factory=list)
@@ -223,6 +229,48 @@ def reconcile(
         if symbol in state.positions:
             tp = state.positions[symbol]
             new_qty = abs(pos_row.quantity)
+
+            # A partial exit (placed outside the daemon — e.g. manually via MCP — the
+            # daemon itself never sells part of a position) used to vanish into the qty
+            # refresh below with zero P&L recorded, only ever showing up once as part of
+            # the FINAL close's blended price. Record it as its own closed entry now, using
+            # the day's blended sell/buy price for whatever quantity just left. This is
+            # exact for a symbol's first partial exit of the day; a second partial on the
+            # same symbol the same day would blend in the first one's price too — a known
+            # limitation, still strictly better than recording nothing.
+            if 0 < new_qty < tp.qty:
+                exited_qty = tp.qty - new_qty
+                exit_price = (
+                    pos_row.sell_price if tp.dir == Direction.LONG else pos_row.buy_price
+                )
+                if exit_price:
+                    r_mult = round(rules.realized_r(tp.entry, exit_price, tp.r, tp.dir), 2)
+                    pnl = round(
+                        (exit_price - tp.entry) * exited_qty
+                        if tp.dir == Direction.LONG
+                        else (tp.entry - exit_price) * exited_qty,
+                        2,
+                    )
+                    record = {
+                        "symbol": symbol,
+                        "direction": tp.direction,
+                        "entry": tp.entry,
+                        "exit_price": exit_price,
+                        "qty": exited_qty,
+                        "realized_r": r_mult,
+                        "realized_pnl": pnl,
+                        "exit_reason": "PARTIAL_EXIT",
+                        "phase_at_exit": tp.phase,
+                        "exit_time": clock.now_ist().isoformat(),
+                    }
+                    state.closed.append(record)
+                    report.partial_exits.append(record)
+                else:
+                    report.warnings.append(
+                        f"{symbol}: qty dropped {tp.qty} -> {new_qty} but no sell/buy "
+                        "price was available to record the partial exit's P&L"
+                    )
+
             # Adding to a position moves the entry VWAP, which changes R and therefore
             # every phase threshold. Re-read entry and the risk.json seed whenever qty
             # changes, not just on first discovery. (A partial exit leaves the entry-side
