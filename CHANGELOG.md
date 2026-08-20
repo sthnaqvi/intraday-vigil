@@ -23,12 +23,17 @@ multi-broker-capable package.
   hardcoded filesystem paths.
 - Full docs set: quickstart, usage, safety, architecture, adding-a-broker, markets, and
   dual-track incident write-ups (`docs/incidents/`).
-- The Claude Code skill, migrated into this repo (`skill/intraday-trader/`), split into a
+- The Claude Code skill, migrated into this repo (`skill/intraday-vigil/`), split into a
   router plus per-mode reference files, and de-personalized.
 
 ### Changed
 - Renamed `algo` → `vigil` throughout; moved to a `src/` layout; became pip-installable
   with a `vigil` console-script entry point.
+- Renamed the published package and the skill to `intraday-vigil` (from the PyPI name
+  `vigil`, already claimed by an unrelated package, and the skill's old generic
+  `intraday-trader`). The `vigil` CLI command is unchanged — `pip install
+  "intraday-vigil[kite]"` still gives you `vigil start`/`vigil status`/etc. — so this is a
+  packaging and discoverability change, not a rewrite of daily usage.
 - Position/order reads go through typed models instead of raw broker dicts.
 - `cli.py` split into `commands/*.py`, one module per command group.
 

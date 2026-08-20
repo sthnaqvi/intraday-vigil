@@ -3,7 +3,7 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "vigil"
+name = "intraday-vigil"
 version = "0.1.0.dev0"
 description = "Bell-to-bell intraday trading, watched."
 readme = "README.md"
@@ -26,8 +26,9 @@ dependencies = [
 
 # Core (models, rules, the daemon loop, the broker port) has NO broker SDK dependency —
 # only an adapter's own extra pulls one in. `paper` is intentionally empty: the paper
-# adapter is pure Python and ships in core; the extra exists so `pip install vigil[paper]`
-# reads symmetrically with `vigil[kite]` in docs, not because it installs anything.
+# adapter is pure Python and ships in core; the extra exists so
+# `pip install intraday-vigil[paper]` reads symmetrically with `intraday-vigil[kite]` in
+# docs, not because it installs anything.
 [project.optional-dependencies]
 kite = ["kiteconnect>=5.2"]
 paper = []
@@ -43,8 +44,8 @@ lint = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/sthnaqvi/vigil"
-Issues = "https://github.com/sthnaqvi/vigil/issues"
+Homepage = "https://github.com/sthnaqvi/intraday-vigil"
+Issues = "https://github.com/sthnaqvi/intraday-vigil/issues"
 
 [project.scripts]
 vigil = "vigil.cli:main"

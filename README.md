@@ -1,4 +1,4 @@
-# vigil
+# intraday-vigil
 
 **bell-to-bell intraday trading, watched.**
 
@@ -46,9 +46,9 @@ the daemon is always safe — resting stops keep protecting you at the exchange.
 ## Install
 
 ```bash
-pip install "vigil[kite]"     # Zerodha Kite — needs a Kite Connect API key
+pip install "intraday-vigil[kite]"     # Zerodha Kite — needs a Kite Connect API key
 # or
-pip install "vigil[paper]"    # paper trading — no broker account needed
+pip install "intraday-vigil[paper]"    # paper trading — no broker account needed
 ```
 
 Both give you the `vigil` command. See [`docs/quickstart.md`](docs/quickstart.md) for a
@@ -75,16 +75,16 @@ a single class plus running `tests/conformance/test_broker_contract.py` against 
 
 ## The Claude skill
 
-`skill/intraday-trader/` is the companion Claude Code skill for everything the daemon
+`skill/intraday-vigil/` is the companion Claude Code skill for everything the daemon
 doesn't decide for you — morning bias, macro theme, sector ranking, entry timing, and
 post-session review. Install it with:
 
 ```bash
-ln -s "$(pwd)/skill/intraday-trader" ~/.claude/skills/intraday-trader
+ln -s "$(pwd)/skill/intraday-vigil" ~/.claude/skills/intraday-vigil
 ```
 
 (or copy it, if you'd rather not symlink). Verify it actually took —
-`readlink ~/.claude/skills/intraday-trader` must print this repo's path; if you had an
+`readlink ~/.claude/skills/intraday-vigil` must print this repo's path; if you had an
 older copy of this skill installed already, `ln -s` silently refuses to overwrite it and
 you'll keep running stale instructions with no error telling you so.
 
@@ -92,7 +92,7 @@ It talks to the daemon entirely through the `vigil` CLI — see the skill's own 
 for its hard rules, chief among them: **the skill never modifies an SL order once the
 daemon owns it.** **Running `vigil start` does not invoke the skill or scan any stocks** —
 those only happen inside a conversation with Claude where you ask for them (e.g.
-`/intraday-trader start`). See [`docs/user-guide.md`](docs/user-guide.md) for the full
+`/intraday-vigil start`). See [`docs/user-guide.md`](docs/user-guide.md) for the full
 day-in-the-life walkthrough of how the two halves work together.
 
 ## Tests

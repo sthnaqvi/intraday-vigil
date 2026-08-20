@@ -1,15 +1,16 @@
 ---
-name: intraday-trader
+name: intraday-vigil
 description: >
   Full-lifecycle intraday trading assistant for MIS-style equity positions, paired with
-  the vigil daemon for SL lifecycle execution. TRIGGER on: /intraday-trader,
+  the vigil daemon for SL lifecycle execution. TRIGGER on: /intraday-vigil,
   "start trading session", "check my positions", "trailing stop", "modify SL",
   "exit all positions", "end of day", "post-session review", "what sectors are moving",
   "intraday setup", "trade today". Use for any trading-session workflow from pre-market
   to post-session review.
 prerequisites:
-  - vigil installed and on PATH (`pip install vigil[kite]`, or `vigil[paper]` with no
-    broker account) — see the top-level README for install and broker setup.
+  - vigil installed and on PATH (`pip install intraday-vigil[kite]`, or
+    `intraday-vigil[paper]` with no broker account) — see the top-level README for install
+    and broker setup.
   - A broker adapter configured (Kite credentials in the daemon's env, or paper mode).
 allowed-tools: Bash, Read
 ---
@@ -69,11 +70,11 @@ Quotes without MCP: `vigil quote SYMBOL [SYMBOL...]`
 
 | Command | When to use | Reference |
 |---|---|---|
-| `/intraday-trader start` | Morning — begin the session | `references/mode-start.md` |
-| `/intraday-trader monitor` | During session — render the daemon's snapshot | `references/mode-monitor.md` |
-| `/intraday-trader reassess` | Mid-session, user-triggered — re-rank sectors, add/exit | `references/mode-reassess.md` |
-| `/intraday-trader exit` | Late session — square off all MIS manually | `references/mode-exit.md` |
-| `/intraday-trader rca` | After the close — post-session analysis | `references/mode-rca.md` |
+| `/intraday-vigil start` | Morning — begin the session | `references/mode-start.md` |
+| `/intraday-vigil monitor` | During session — render the daemon's snapshot | `references/mode-monitor.md` |
+| `/intraday-vigil reassess` | Mid-session, user-triggered — re-rank sectors, add/exit | `references/mode-reassess.md` |
+| `/intraday-vigil exit` | Late session — square off all MIS manually | `references/mode-exit.md` |
+| `/intraday-vigil rca` | After the close — post-session analysis | `references/mode-rca.md` |
 
 Read the **entire** reference file for the mode in use, in full, before starting that
 mode — don't fetch it step-by-step as you go. This router stays small so a MONITOR call
@@ -89,7 +90,7 @@ auto-suggestion — the same level of detail the reference file itself models, n
 compressed summary of it. If the user's message could support more than one reasonable
 next action, ask which they want rather than picking one silently.
 
-If the user says just `/intraday-trader` with no sub-command, ask which mode they want.
+If the user says just `/intraday-vigil` with no sub-command, ask which mode they want.
 
 ## Entry gate (every new entry, in any mode)
 

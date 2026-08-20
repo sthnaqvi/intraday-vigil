@@ -7,7 +7,7 @@ same code path Kite uses, not a stub.
 ## 1. Install
 
 ```bash
-pip install "vigil[paper]"
+pip install "intraday-vigil[paper]"
 ```
 
 Confirm it landed:
@@ -120,13 +120,13 @@ vigil paths --json    # find data_dir, then:
 cat "$(vigil paths --json | python3 -c 'import json,sys; print(json.load(sys.stdin)["data_dir"])')"/events-$(date +%F).jsonl
 ```
 
-The Claude skill's RCA mode (`/intraday-trader rca`) does this same walk automatically and
-scores the session — see `skill/intraday-trader/references/mode-rca.md`.
+The Claude skill's RCA mode (`/intraday-vigil rca`) does this same walk automatically and
+scores the session — see `skill/intraday-vigil/references/mode-rca.md`.
 
 ## Next: a live Kite session
 
 ```bash
-pip install "vigil[kite]"
+pip install "intraday-vigil[kite]"
 ```
 
 1. Create a Kite Connect app at [developers.kite.trade](https://developers.kite.trade) and
@@ -150,5 +150,5 @@ expected it to.
 
 - [`docs/usage.md`](usage.md) — every command
 - [`docs/sl-rules.md`](sl-rules.md) — exactly what the daemon does and why
-- `skill/intraday-trader/` — the Claude skill for everything upstream of the daemon
+- `skill/intraday-vigil/` — the Claude skill for everything upstream of the daemon
   (sector selection, entry timing, post-session review)

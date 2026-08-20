@@ -40,7 +40,7 @@ the same way you're reading this guide right now.
 ### 1. Install vigil
 
 ```bash
-pip install "vigil[kite]"      # or vigil[paper] for no-account paper trading
+pip install "intraday-vigil[kite]"      # or intraday-vigil[paper] for no-account paper trading
 ```
 
 Set up Kite credentials — see [`docs/quickstart.md`](quickstart.md) if you haven't. Verify:
@@ -55,7 +55,7 @@ The skill is a *separate* install, in a *separate* location, read by Claude — 
 `vigil`. From the repo root:
 
 ```bash
-ln -s "$(pwd)/skill/intraday-trader" ~/.claude/skills/intraday-trader
+ln -s "$(pwd)/skill/intraday-vigil" ~/.claude/skills/intraday-vigil
 ```
 
 **Verify it actually took.** This step silently does nothing useful if you already have
@@ -64,12 +64,12 @@ refuse to overwrite it and you'll still be running stale instructions with no er
 telling you so. Check:
 
 ```bash
-readlink ~/.claude/skills/intraday-trader
+readlink ~/.claude/skills/intraday-vigil
 ```
 
-That must print this repo's `skill/intraday-trader` path. If it prints nothing, the
+That must print this repo's `skill/intraday-vigil` path. If it prints nothing, the
 target isn't a symlink — move the existing directory aside first
-(`mv ~/.claude/skills/intraday-trader ~/.claude/skills/intraday-trader.bak`) and re-run
+(`mv ~/.claude/skills/intraday-vigil ~/.claude/skills/intraday-vigil.bak`) and re-run
 the `ln -s` above.
 
 ### 3. Confirm Claude can see it
@@ -88,11 +88,11 @@ columns — that's the distinction that was missing.
 **You do:** Open a conversation with Claude (this could be a Claude Code terminal session,
 exactly like the one you're reading this in) and say:
 
-> `/intraday-trader start`
+> `/intraday-vigil start`
 
 or just "start my trading session" — the skill triggers on either.
 
-**Claude does:** Follows `skill/intraday-trader/references/mode-start.md` step by step,
+**Claude does:** Follows `skill/intraday-vigil/references/mode-start.md` step by step,
 out loud, in the conversation:
 1. Runs `vigil start` for you (via its own terminal access) — this is the *only* step
    that touches `vigil` directly so far.
@@ -116,7 +116,7 @@ the session ends.
 **You do:** Either watch the dashboard yourself (`vigil web`, then open
 `http://127.0.0.1:8765`) — no Claude needed for this — or ask Claude:
 
-> `/intraday-trader monitor`
+> `/intraday-vigil monitor`
 
 **Claude does:** Reads `vigil status --json` and renders it as a readable snapshot —
 phases, unrealised P&L, whether anything is unprotected. It does **not** touch any order;
@@ -127,7 +127,7 @@ whether anyone is watching.
 
 If momentum shifts and you want to re-rank sectors or reconsider a position:
 
-> `/intraday-trader reassess`
+> `/intraday-vigil reassess`
 
 Claude re-runs the sector scan and flags anything worth reconsidering — same "propose,
 then wait for your yes" pattern as START for any new entry.
@@ -138,16 +138,16 @@ Two ways this ends, and both are fine:
 
 - **Do nothing.** `vigil`'s daemon squares off everything on its own schedule (15:05 IST
   by default, ahead of the broker's own close-of-day force-square).
-- **Ask Claude to do it early:** `/intraday-trader exit` — runs `vigil squareoff` for you
+- **Ask Claude to do it early:** `/intraday-vigil exit` — runs `vigil squareoff` for you
   and reports the fills.
 
 ### After the close
 
-**You do:** `/intraday-trader rca`
+**You do:** `/intraday-vigil rca`
 
 **Claude does:** Reads the full event log `vigil` wrote all day (`vigil paths --json` →
 `data_dir` → `events-<date>.jsonl`) and scores the session against the 10-point rubric in
-`skill/intraday-trader/references/rca-template.md` — sector selection, entry timing, SL
+`skill/intraday-vigil/references/rca-template.md` — sector selection, entry timing, SL
 discipline, sizing, and more — then gives you the top 3 mistakes to fix tomorrow.
 
 ## What each `vigil` command actually does (and doesn't)
@@ -166,7 +166,7 @@ Claude conversation — never a `vigil` command by itself.
 
 **"I ran `vigil start` / `vigil web` and nothing scanned any stocks."** Correct and
 expected — see "The mental model" above. Open a Claude conversation and ask for
-`/intraday-trader start` if that's what you want.
+`/intraday-vigil start` if that's what you want.
 
 **"`vigil enter` gave me an error about missing arguments."** It's not meant to be run
 bare — it needs a symbol and your sizing decision:
@@ -174,10 +174,10 @@ bare — it needs a symbol and your sizing decision:
 fills these in for you after walking through Steps 1–6 of START; you only run it directly
 if you're placing a trade you already fully decided on yourself.
 
-**"I typed `/intraday-trader` and nothing recognized it, or it gave weird old-looking
+**"I typed `/intraday-vigil` and nothing recognized it, or it gave weird old-looking
 instructions."** The skill likely isn't actually installed, or an old copy is shadowing
 the real one — see "Verify it actually took" above. `readlink
-~/.claude/skills/intraday-trader` must point into this repo.
+~/.claude/skills/intraday-vigil` must point into this repo.
 
 **"The dashboard didn't open."** `vigil web` starts a *server*; it does not open a browser
 tab for you. Copy the URL it prints (`http://127.0.0.1:8765` by default) into your own
@@ -189,5 +189,5 @@ browser.
   command, with real output
 - [`docs/usage.md`](usage.md) — every `vigil` subcommand
 - [`docs/safety.md`](safety.md) — what can place a real order, and what can't
-- `skill/intraday-trader/SKILL.md` — the skill's own rules, read by Claude, not by you day
+- `skill/intraday-vigil/SKILL.md` — the skill's own rules, read by Claude, not by you day
   to day — but worth reading once to know what Claude is actually going to do

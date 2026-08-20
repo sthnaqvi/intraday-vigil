@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Cross-check every instrument token in skill/intraday-trader/references/sector-universe.md
+"""Cross-check every instrument token in skill/intraday-vigil/references/sector-universe.md
 against Kite's live NSE instrument master, and optionally rewrite the file with corrections.
 
 Why this exists: on 2026-08-20, a live session hit repeated failures traced back to this file
@@ -33,7 +33,7 @@ from kiteconnect import KiteConnect  # noqa: E402
 
 DOC_PATH = (
     Path(__file__).resolve().parent.parent
-    / "skill" / "intraday-trader" / "references" / "sector-universe.md"
+    / "skill" / "intraday-vigil" / "references" / "sector-universe.md"
 )
 LINE_RE = re.compile(r"^(-\s+NSE:(\S+)\s+\(token\s+)(\d+)(\).*)$")
 

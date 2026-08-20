@@ -166,15 +166,15 @@ COMMANDS: dict[str, dict] = {
 
 # Skill modes live on the Claude side, so the UI enqueues them as questions.
 SKILL_MODES = {
-    "monitor":  "Run /intraday-trader monitor — render the daemon snapshot, check the "
+    "monitor":  "Run /intraday-vigil monitor — render the daemon snapshot, check the "
                 "protected flag on every position, and run the thesis-decay check.",
-    "reassess": "Run /intraday-trader reassess — re-rank all 11 sectors, check whether each "
+    "reassess": "Run /intraday-vigil reassess — re-rank all 11 sectors, check whether each "
                 "open position's sector is still top/bottom 3, and surface new setups.",
-    "exit":     "Run /intraday-trader exit — square off all open MIS manually and report the "
+    "exit":     "Run /intraday-vigil exit — square off all open MIS manually and report the "
                 "exit summary.",
-    "rca":      "Run /intraday-trader rca — post-session analysis from today's event log, "
+    "rca":      "Run /intraday-vigil rca — post-session analysis from today's event log, "
                 "scored against the rubric, with the top 3 mistakes to avoid tomorrow.",
-    "start":    "Run /intraday-trader start — opening bias, macro theme, sector ranking and "
+    "start":    "Run /intraday-vigil start — opening bias, macro theme, sector ranking and "
                 "stock scoring for a new session.",
 }
 

@@ -157,4 +157,4 @@ daemon's console). Structured: the events JSONL and the audit trail above.
 | "SL qty mismatch fixed" notifications | Working as intended — that's a documented broker quirk being caught, see `docs/incidents/verification-gaps.md` |
 | `historical_data unavailable` warning | Some API keys lack the historical-data add-on; seed `pdh`/`pdl` via `add-position` instead |
 | Daemon refuses to run | Market closed — `--force` to override (e.g. testing outside session hours) |
-| `kiteconnect is not installed` | You're on the base install or `vigil[paper]` — `pip install "vigil[kite]"` for live Kite trading |
+| `kiteconnect is not installed` | You're on the base install or `intraday-vigil[paper]` — `pip install "intraday-vigil[kite]"` for live Kite trading |

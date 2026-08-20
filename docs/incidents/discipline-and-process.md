@@ -15,7 +15,7 @@ meant.
 **Rule:** any exit or cancel instruction that could plausibly apply to more than one open
 position stops the workflow entirely. The only next action is asking which symbol, by name,
 before anything is cancelled or sold. This is documented as a hard rule in the skill's
-MONITOR reference — see `skill/intraday-trader/references/mode-monitor.md`.
+MONITOR reference — see `skill/intraday-vigil/references/mode-monitor.md`.
 
 ## Entries placed past the cutoff with no setup basis
 
@@ -40,7 +40,7 @@ that rule existed as guidance rather than a checked gate at the point the pick w
 
 **Rule:** direction discipline against the day's gap bias is now a hard filter applied
 *before* a candidate is shown, not a guideline checked after the fact. See the
-direction-discipline rule in `skill/intraday-trader/references/mode-start.md`.
+direction-discipline rule in `skill/intraday-vigil/references/mode-start.md`.
 
 ## A stalled short thesis wasn't flagged for seven candles
 
@@ -53,7 +53,7 @@ process surfaced that until it was noticed by eye, well after the thesis had sta
 just at entry — re-reading the same setup criteria that justified the trade and saying so
 plainly if they no longer hold. A stalled thesis isn't an automatic exit, but it has to
 enter the hold/exit conversation instead of going unmentioned. See
-`skill/intraday-trader/references/mode-monitor.md`.
+`skill/intraday-vigil/references/mode-monitor.md`.
 
 ## A scheduled exit was disabled without deciding what replaces it
 
@@ -71,7 +71,7 @@ to it.
 explicit answer to "then what closes this, and when" — a specific trigger price or a firm
 manual-exit time, decided *before* the safety net comes down — never just the removal of
 the earlier exit with an assumption that things will work out. See
-`skill/intraday-trader/references/mode-monitor.md`.
+`skill/intraday-vigil/references/mode-monitor.md`.
 
 ## Position sizing never reserved anything for its own transaction costs
 

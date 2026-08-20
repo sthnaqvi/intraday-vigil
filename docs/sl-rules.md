@@ -4,7 +4,7 @@ This is the single source of truth for the SL lifecycle. `vigil`'s daemon
 (`src/vigil/monitor.py`, `src/vigil/rules.py`) executes every rule on this page
 automatically, every cycle, for every open position. The Claude skill applies only the
 entry-time rules (initial SL width, stop-hunt guard before sizing) and never modifies an
-SL order once the daemon owns it — see `skill/intraday-trader/SKILL.md`'s hard rules.
+SL order once the daemon owns it — see `skill/intraday-vigil/SKILL.md`'s hard rules.
 
 All the defaults below are configured in `src/vigil/config.py` and `src/vigil/rules.py`.
 They're this project's defaults, not laws of physics — change them for your own risk

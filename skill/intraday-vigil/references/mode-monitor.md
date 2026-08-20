@@ -65,7 +65,7 @@ Render rules:
 
 6. **Reassess prompt**: if it's meaningfully into the session (late morning or early
    afternoon by your market's session length) and reassess hasn't been run since that mark
-   this session, append: "Want me to run `/intraday-trader reassess` to re-rank sectors?"
+   this session, append: "Want me to run `/intraday-vigil reassess` to re-rank sectors?"
    (Reassess is user-triggered; never self-schedule it.)
 
 ## What MONITOR must never do

@@ -130,7 +130,7 @@ def test_skill_modes_are_prompts_not_commands():
     """Skill modes must never map into COMMANDS — they go to Claude, not the shell."""
     assert set(webui.SKILL_MODES).isdisjoint(set(webui.COMMANDS) - {"start", "exit"})
     for text in webui.SKILL_MODES.values():
-        assert text.startswith("Run /intraday-trader ")
+        assert text.startswith("Run /intraday-vigil ")
 
 
 # ---------- raw log pane ----------
