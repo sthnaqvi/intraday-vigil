@@ -85,3 +85,27 @@ no cash cushion left to cover its own charges.
 time — must exist before quantity is computed, specifically to cover the transaction costs
 of the exit that will eventually have to fire. See `docs/sl-rules.md`'s position-sizing
 section.
+
+## A scheduled exit was disabled without a replacement plan — again, on a later session
+
+The exact same decision as the entry above happened again on a different day: the
+scripted square-off exists specifically to beat the exchange's own forced closure by a few
+minutes, and it was stopped a few minutes before it could fire, with nothing armed to
+replace it for the window that opened up — no manual exit, no exit-trigger, no firm
+manual-exit time decided in advance. The documented rule from the first occurrence already
+existed and was broken again anyway.
+
+The exchange's own forced closure filled the gap both times, as it always will when nothing
+else is watching. The outcome differed only by chance: the first time, the position bled
+steadily through the entire unmanaged window and the forced closure landed at the worst
+price of that stretch; the second time, price happened to drift back in the position's
+favor during the gap, so the forced closure landed better than the price at the moment the
+exit was stopped. Same decision, same process gap, opposite luck — which is exactly the
+problem with relying on a documented rule that only survives by being remembered in the
+moment.
+
+**Rule (restated, now twice-violated):** disabling a scheduled exit is only half a decision
+without an explicit answer to "then what closes it, and when" — decided *before* the safety
+net comes down, not assumed afterward. A rule that depends purely on memory has now failed
+on two separate occasions; the fix under consideration is making the disabling action itself
+harder to take inside the pre-squareoff window, not restating the rule a third time.
