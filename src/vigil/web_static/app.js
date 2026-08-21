@@ -165,6 +165,11 @@ function render(s){
   if(naked.length){ nb.style.display='inline'; nb.textContent='!' } else nb.style.display='none';
 
   $('pos').innerHTML=posTable(s); $('pos2').innerHTML=posTable(s);
+  // Repeated next to the table itself, not just in the header far above — a stale
+  // number is easy to miss if the only clock is a small pill you have to scroll back to.
+  const ageTxt = d.running ? `as of ${d.age_s}s ago${d.fresh?'':' — STALE'}` : '';
+  $('pos_age').textContent = ageTxt; $('pos_age').className = d.fresh ? 'dim' : 'down';
+  $('pos2_age').textContent = ageTxt; $('pos2_age').className = d.fresh ? 'dim' : 'down';
   $('trig').innerHTML=trigTable(s); $('trig2').innerHTML=trigTable(s);
   $('events_s').innerHTML=evList(s,12); $('events_full').innerHTML=evList(s,200);
 
