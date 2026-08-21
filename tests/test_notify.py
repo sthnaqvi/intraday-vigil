@@ -75,3 +75,28 @@ def test_backend_failure_still_reaches_terminal(monkeypatch, capsys):
     mod._backend = AlwaysFails()
     mod.notify("must not vanish")
     assert "must not vanish" in capsys.readouterr().err
+
+
+def test_a_successful_os_notification_still_logs(monkeypatch, caplog):
+    """The actual bug report: on a machine with a WORKING notifier, the old code skipped
+    the terminal echo entirely once the OS backend reported success — so a `vigil monitor`
+    running in a terminal (the primary way this tool is used) never showed what fired,
+    only a transient OS toast (plus a sound, if any) did. Logging must be unconditional,
+    not a fallback for backend failure — it's also what makes an alert show up in the web
+    dashboard's Live Log dock (a logs/algo.log source), not just the terminal."""
+    monkeypatch.setattr(notify.platform, "system", lambda: "Darwin")
+    monkeypatch.setattr(notify.shutil, "which", lambda tool: "/usr/bin/osascript")
+    mod = importlib.reload(notify)
+
+    class AlwaysSucceeds:
+        name = "working"
+        def notify(self, *a, **k): return True
+        def alert(self, *a, **k): return True
+
+    mod._backend = AlwaysSucceeds()
+    with caplog.at_level("INFO", logger="vigil"):
+        mod.notify("SL moved to breakeven", sound=True)
+        mod.alert_dialog("TESTSYM is UNPROTECTED")
+
+    assert "SL moved to breakeven" in caplog.text
+    assert "TESTSYM is UNPROTECTED" in caplog.text

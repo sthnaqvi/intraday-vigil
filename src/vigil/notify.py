@@ -10,6 +10,17 @@ system watching a live position.
 `can_notify()` is now checked at daemon startup (see cli.py's --allow-silent) and a live
 daemon refuses to start without a working notifier, unless the user explicitly accepts
 running silent.
+
+Every notify()/alert_dialog() call also logs, unconditionally, before the OS backend is
+even attempted — not as a fallback for when the backend fails, but always. The old
+behaviour logged to the terminal ONLY if the OS notifier failed: on a machine with a
+working notifier (the common case), a `vigil monitor` running in a terminal — the primary
+way this tool is actually used — never printed what fired; only a transient OS toast (plus
+a sound, if any) did. Miss the toast and you got the sound and nothing else, in the one
+place you were most likely actually watching. Logging here means it lands in
+logs/algo.log, which is also one of the web dashboard's Live Log sources — so this one
+change makes every alert durably visible in the CLI console *and* the dashboard, with no
+new UI surface required.
 """
 from __future__ import annotations
 
@@ -17,6 +28,8 @@ import platform
 import shutil
 import subprocess
 import sys
+
+from .events import logger
 
 
 class _Backend:
@@ -120,6 +133,7 @@ def backend_name() -> str:
 
 
 def notify(message: str, title: str = "vigil", sound: bool = False) -> None:
+    logger.info("[NOTIFY] %s: %s", title, message)
     delivered = _backend.notify(message, title, sound) if _backend else False
     if not delivered:
         _terminal.notify(message, title, sound)
@@ -127,6 +141,7 @@ def notify(message: str, title: str = "vigil", sound: bool = False) -> None:
 
 def alert_dialog(message: str, title: str = "vigil") -> None:
     """Modal alert for events that must not be missed (token expiry, unprotected position)."""
+    logger.warning("[ALERT] %s: %s", title, message)
     delivered = _backend.alert(message, title) if _backend else False
     if not delivered:
         _terminal.alert(message, title)
