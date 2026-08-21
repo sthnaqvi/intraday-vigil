@@ -34,6 +34,8 @@ def order_from_kite(row: dict) -> Order:
         quantity=row.get("quantity") or 0,
         average_price=row.get("average_price") or 0.0,
         status_message=row.get("status_message"),
+        placed_by=row.get("placed_by") or "",
+        order_timestamp=str(row.get("order_timestamp") or ""),
     )
 
 

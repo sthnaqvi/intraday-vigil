@@ -161,3 +161,20 @@ corrected after the fact for missing exactly this.
 compute `shortfall ÷ leverage` first — that's the additional order value needed. Only
 conclude the leverage assumption itself was wrong if that number is wildly inconsistent
 with the rejection's own figures.
+
+## An unrelated exit was recorded as if it had been placed by the user
+
+A position closed while the tracking process wasn't running to observe how. On restart, the
+reconciliation path found the position already flat at the broker and recorded it with a
+generic "manual exit" label — the default for any closure it can't otherwise explain. The
+actual mechanism (a broker-side forced closure, unrelated to anything the user or the
+tracked SL order did) was never distinguished from a real manual sell, because the
+reconcile path only has one label for "closed, and I don't know why."
+
+The realized P&L figure itself was still correct, independently verified against the
+broker's own position record — this was a label problem, not a money problem. But a label
+that's wrong by default corrupts every later read of the session's own history, silently.
+
+**Fix:** when reconciliation finds a tracked position closed with no local order or trigger
+record explaining it, label it as unexplained rather than defaulting to the same label used
+for a real, observed manual exit.

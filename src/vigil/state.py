@@ -148,6 +148,25 @@ def order_by_id(orders: list[Order], order_id: str) -> Order | None:
     return None
 
 
+def _broker_forced_exit_order(orders: list[Order], symbol: str,
+                              direction: Direction) -> Order | None:
+    """The latest COMPLETE exit-side order for `symbol` today, if it was placed by a
+    broker-side system account (Kite's own forced square-off shows up as
+    `placed_by: "ADMINSQF"`) rather than the account's own client ID. Used to tell a
+    genuine broker-forced closure apart from an ordinary exit reconcile() only discovers
+    after the fact — see the BROKER_FORCED branch above. Returns None (not evidence
+    either way) if no such order exists or its `placed_by` looks like the account's own."""
+    want_txn = "SELL" if direction == Direction.LONG else "BUY"
+    candidates = [
+        o for o in orders
+        if o.symbol == symbol and o.product == "MIS" and o.status == "COMPLETE"
+        and o.transaction_type == want_txn and o.placed_by.upper().startswith("ADMIN")
+    ]
+    if not candidates:
+        return None
+    return max(candidates, key=lambda o: o.order_timestamp)
+
+
 # ---------- reconciliation ----------
 
 @dataclass
@@ -192,7 +211,16 @@ def reconcile(
             exit_price = sl_order.average_price or tp.sl_price
             reason = {1: "SL_HIT", 2: "BE_STOP", 3: "TRAIL_EXIT"}[tp.phase]
         else:
-            reason = "SQUAREOFF" if state.squareoff_done else "MANUAL_EXIT"
+            forced_by = _broker_forced_exit_order(orders, symbol, tp.dir)
+            if forced_by is not None:
+                # The daemon wasn't running to see this happen (it only shows up here,
+                # after the fact, via reconcile) — a broker-side forced closure, not
+                # anything the user or the daemon itself did. Defaulting this to
+                # MANUAL_EXIT asserted a specific, often-wrong story; see
+                # docs/incidents/verification-gaps.md's mislabeled-exit entry.
+                reason = "BROKER_FORCED"
+            else:
+                reason = "SQUAREOFF" if state.squareoff_done else "MANUAL_EXIT"
             if pos_row is not None:
                 exit_price = (
                     pos_row.sell_price if tp.dir == Direction.LONG else pos_row.buy_price

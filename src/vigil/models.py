@@ -46,3 +46,10 @@ class Order:
     quantity: int
     average_price: float = 0.0
     status_message: str | None = None
+    # Who placed it: the account's own client ID for anything placed through the API or
+    # the broker's app, or a system code like "ADMINSQF" for a broker-side forced
+    # square-off. Used by state.reconcile() to tell "we don't know how this closed"
+    # apart from "the exchange closed it" instead of defaulting both to the same guess —
+    # see docs/incidents/verification-gaps.md's mislabeled-exit entry.
+    placed_by: str = ""
+    order_timestamp: str = ""  # ISO string; only needed to pick the LATEST matching order

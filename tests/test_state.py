@@ -18,6 +18,14 @@ def _sl_order(oid, symbol, txn, trigger, qty, status="TRIGGER PENDING", average_
                 quantity=qty, average_price=average_price)
 
 
+def _market_order(oid, symbol, txn, qty, average_price, placed_by="",
+                  order_timestamp="2026-08-21T15:00:00+05:30", status="COMPLETE"):
+    return Order(order_id=oid, symbol=symbol, product="MIS", order_type="MARKET",
+                transaction_type=txn, status=status, trigger_price=0.0, quantity=qty,
+                average_price=average_price, placed_by=placed_by,
+                order_timestamp=order_timestamp)
+
+
 def test_discovery_with_seed_and_derived():
     s = SessionState(date="2026-08-17")
     positions = [_pos_row("INDIGO", 100, buy=4150.0), _pos_row("TATASTEEL", -50, sell=160.0)]
@@ -79,6 +87,52 @@ def test_manual_exit_cancels_orphan_sl():
     assert report.orphan_sl_cancelled == ["O9"]
     assert report.exited[0]["exit_reason"] == "MANUAL_EXIT"
     assert report.exited[0]["exit_price"] == 805.0
+
+
+def test_broker_forced_closure_not_mislabeled_manual_exit():
+    """The daemon was stopped, missed the actual closure entirely, and on restart found
+    KOTAKBANK already flat — closed by Zerodha's own forced square-off (`placed_by:
+    "ADMINSQF"`), not a real manual exit. The SL order it was tracking shows CANCELLED
+    (ADMINSQF cancelled it before market-selling), and a separate COMPLETE market order
+    placed by ADMINSQF is what actually closed the position. reconcile() must label this
+    BROKER_FORCED, not default it to MANUAL_EXIT — see
+    docs/incidents/verification-gaps.md's mislabeled-exit entry (2026-08-21)."""
+    s = SessionState(date="2026-08-21")
+    s.positions["KOTAKBANK"] = TrackedPosition(
+        symbol="KOTAKBANK", direction="LONG", entry=402.9888, qty=3674,
+        sl_order_id="O1", sl_price=397.85, sl_pct=0.0128,
+    )
+    positions = [_pos_row("KOTAKBANK", 0, buy=402.9888, sell=402.7712)]
+    orders = [
+        _sl_order("O1", "KOTAKBANK", "SELL", 397.85, 3674, status="CANCELLED"),
+        _market_order("O2", "KOTAKBANK", "SELL", 3674, 402.7712, placed_by="ADMINSQF",
+                      order_timestamp="2026-08-21T15:12:30+05:30"),
+    ]
+    report = state_mod.reconcile(s, positions, orders, {})
+
+    assert len(report.exited) == 1
+    rec = report.exited[0]
+    assert rec["exit_reason"] == "BROKER_FORCED"
+    assert rec["exit_price"] == 402.7712
+    assert round(rec["realized_pnl"], 2) == round((402.7712 - 402.9888) * 3674, 2)
+
+
+def test_real_manual_exit_still_labeled_manual_exit():
+    """A genuine `vigil exit` (or an ordinary manual sell in the broker's own app) closes
+    a position with no ADMIN-prefixed placed_by anywhere in its order history — must still
+    fall through to MANUAL_EXIT, unaffected by the BROKER_FORCED check above."""
+    s = SessionState(date="2026-08-21")
+    s.positions["SBIN"] = TrackedPosition(
+        symbol="SBIN", direction="LONG", entry=800.0, qty=100,
+        sl_order_id="O9", sl_price=792.0, sl_pct=0.01,
+    )
+    positions = [_pos_row("SBIN", 0, buy=800.0, sell=805.0)]
+    orders = [
+        _sl_order("O9", "SBIN", "SELL", 792.0, 100, status="CANCELLED"),
+        _market_order("O10", "SBIN", "SELL", 100, 805.0, placed_by="PKR985"),
+    ]
+    report = state_mod.reconcile(s, positions, orders, {})
+    assert report.exited[0]["exit_reason"] == "MANUAL_EXIT"
 
 
 def test_kill_switch_at_minus_2R():
