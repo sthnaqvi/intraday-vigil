@@ -2,7 +2,7 @@
 
 start | stop | login | positions | status | add-position | monitor | squareoff |
 enter | arm | add | exit | web | ask | protect | quote | triggers | disarm |
-arm-exit | exit-triggers | disarm-exit | paper-price | paths
+arm-exit | exit-triggers | disarm-exit | paper-price | paths | skill-install
 """
 from __future__ import annotations
 
@@ -32,6 +32,7 @@ from .commands.orders import (
     cmd_protect,
     cmd_squareoff,
 )
+from .commands.skill import cmd_skill_install
 from .events import setup_logging
 
 
@@ -162,6 +163,13 @@ def main(argv: list[str] | None = None) -> int:
     sp = sub.add_parser("paths", help="where this install keeps its state (VIGIL_HOME/XDG)")
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(fn=cmd_paths)
+
+    sp = sub.add_parser("skill-install",
+                        help="symlink the Claude skill into ~/.claude/skills/ "
+                             "(source checkout only — see the README for a plain-PyPI install)")
+    sp.add_argument("--force", action="store_true",
+                    help="repoint an existing symlink that points elsewhere")
+    sp.set_defaults(fn=cmd_skill_install)
 
     sp = sub.add_parser("paper-price",
                         help="paper mode only: move a symbol's simulated price, "

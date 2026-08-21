@@ -89,6 +89,7 @@ open (or soon-to-be-open) position, whether or not that symbol also has an entry
 |---|---|
 | `vigil web [--port 8765]` | Local dashboard — **can place orders** behind typed confirmation; binds to `127.0.0.1` only, always |
 | `vigil ask [question] [--pending] [--answer ID --text ...]` | Ask Claude (runs the CLI if present, else queues) |
+| `vigil skill-install [--force]` | Symlink `skill/intraday-vigil/` into `~/.claude/skills/` — verifies the result, refuses to clobber an unrelated symlink or a real directory without `--force` (never touches a real directory even then). Source-checkout only; see the README for a plain-PyPI install. |
 
 See `docs/safety.md` for exactly what the dashboard's confirmation flow guarantees.
 
