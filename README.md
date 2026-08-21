@@ -120,6 +120,8 @@ regression tests for the incidents in [`docs/incidents/`](docs/incidents/).
 - [`docs/architecture.md`](docs/architecture.md) — how the pieces fit together
 - [`docs/adding-a-broker.md`](docs/adding-a-broker.md) — the port contract, for a new adapter
 - [`docs/markets.md`](docs/markets.md) — session hours, squareoff timing, holidays
+- [`docs/research/squareoff-timing.md`](docs/research/squareoff-timing.md) — data-driven
+  support for the squareoff-timing default
 - [`docs/incidents/`](docs/incidents/) — real sessions that shaped the hard rules above
 
 ## License

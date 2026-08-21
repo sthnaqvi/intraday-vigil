@@ -147,7 +147,7 @@ def test_realized_r_signs():
 
 def test_time_actions_fire_once_each():
     dt = lambda h, m: datetime(2026, 8, 17, h, m, tzinfo=IST)  # noqa: E731
-    assert rules.due_time_actions(dt(13, 59), set()) == []
+    assert rules.due_time_actions(dt(13, 54), set()) == []
     assert rules.due_time_actions(dt(14, 0), set()) == ["alert_1400"]
     assert rules.due_time_actions(dt(14, 46), {"alert_1400"}) == ["alert_1430", "alert_1445"]
     due = rules.due_time_actions(dt(15, 11), {"alert_1400", "alert_1430", "alert_1445"})
@@ -162,17 +162,17 @@ def test_seconds_until_next_action_clamps_below_the_loop_tick():
     from vigil import config
 
     dt = lambda h, m, s=0: datetime(2026, 8, 17, h, m, s, tzinfo=IST)  # noqa: E731
-    # squareoff at 15:05; a check finishes at 15:04:57 -> 3s left, less than LOOP_TICK_S.
-    s = rules.seconds_until_next_action(dt(15, 4, 57), set())
+    # squareoff at 15:00; a check finishes at 14:59:57 -> 3s left, less than LOOP_TICK_S.
+    s = rules.seconds_until_next_action(dt(14, 59, 57), set())
     assert s == 3
     assert min(config.LOOP_TICK_S, max(s, 1)) == 3
 
 
 def test_seconds_until_next_action_skips_fired_actions():
     dt = lambda h, m: datetime(2026, 8, 17, h, m, tzinfo=IST)  # noqa: E731
-    # alert_1400 already fired; next is alert_1430 at 14:30, 15 min away.
+    # alert_1400 already fired; next is alert_1430 at 14:25, 10 min away.
     s = rules.seconds_until_next_action(dt(14, 15), {"alert_1400"})
-    assert s == 15 * 60
+    assert s == 10 * 60
 
 
 def test_seconds_until_next_action_none_after_everything_fired():

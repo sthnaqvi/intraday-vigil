@@ -36,6 +36,9 @@ multi-broker-capable package.
   packaging and discoverability change, not a rewrite of daily usage.
 - Position/order reads go through typed models instead of raw broker dicts.
 - `cli.py` split into `commands/*.py`, one module per command group.
+- Default `squareoff_at` preponed from 15:05 to 15:00 (`MarketProfile`'s `NSE` instance) —
+  derived alerts shift 5 minutes earlier with it. Data-driven, not a guess:
+  `docs/research/squareoff-timing.md`.
 
 ### Fixed
 - The base package (no `[kite]` extra) crashed on import because `auth.py` imported

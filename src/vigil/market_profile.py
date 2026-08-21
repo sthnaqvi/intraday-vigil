@@ -69,6 +69,6 @@ NSE = MarketProfile(
     market_open=time(9, 15),
     market_close=time(15, 30),
     no_new_entries_after=time(14, 30),
-    squareoff_at=time(15, 5),
+    squareoff_at=time(15, 0),   # preponed from 15:05 — see docs/research/squareoff-timing.md
     venue_squareoff_at=time(15, 10),
 )

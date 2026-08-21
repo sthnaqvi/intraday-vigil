@@ -136,7 +136,7 @@ then wait for your yes" pattern as START for any new entry.
 
 Two ways this ends, and both are fine:
 
-- **Do nothing.** `vigil`'s daemon squares off everything on its own schedule (15:05 IST
+- **Do nothing.** `vigil`'s daemon squares off everything on its own schedule (15:00 IST
   by default, ahead of the broker's own close-of-day force-square).
 - **Ask Claude to do it early:** `/intraday-vigil exit` — runs `vigil squareoff` for you
   and reports the fills.

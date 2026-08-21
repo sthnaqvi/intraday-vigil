@@ -89,7 +89,7 @@ def test_golden_session_replay(tmp_path):
     kite.set_quote("SBIN", 802.0, open_=795, high=805, low=793)
     loop.cycle()
 
-    # Cycle 7 (15:06) — past SQUAREOFF_AT (15:05): SBIN gets force-flattened.
+    # Cycle 7 (15:06) — past SQUAREOFF_AT (15:00): SBIN gets force-flattened.
     loop.now_fn = lambda: _now(15, 6)
     kite.set_quote("SBIN", 803.0, open_=795, high=805, low=793)
     loop.cycle()

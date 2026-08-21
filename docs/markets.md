@@ -41,6 +41,15 @@ ValueError: squareoff_at=15:09:00 leaves only 60s before venue_squareoff_at=15:1
 need at least 240s of head start on the broker's own force-square...
 ```
 
+## Why 15:00, not 15:05
+
+The default `squareoff_at` was preponed from 15:05 to 15:00. This wasn't a guess — it came
+out of historical research (25 stocks, 44 trading days) that found real close-in variance
+starts building from ~15:00, and that exiting earlier within that window costs nothing on
+expected price while meaningfully cutting risk. Moving `squareoff_at` *later* (toward
+`venue_squareoff_at`), by contrast, showed no benefit at all in the same data. Full
+methodology, tables, and caveats: `docs/research/squareoff-timing.md`.
+
 ## Derived alerts, not hardcoded strings
 
 `MarketProfile.time_alerts()` computes each alert's fire time and message text *backward*

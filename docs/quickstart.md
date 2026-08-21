@@ -27,7 +27,7 @@ this out outside trading hours. You'll see something like:
 
 ```
 Daemon started (PAPER, pid 12345). It waits for the 09:15 bell if early,
-squares off at 15:05, and exits on its own. `vigil status` any time; `vigil stop` to halt.
+squares off at 15:00, and exits on its own. `vigil status` any time; `vigil stop` to halt.
 
 Paper mode — no real broker, no real money. Next: place a simulated trade with
 `vigil enter`, or open the dashboard with `vigil web` to watch it.

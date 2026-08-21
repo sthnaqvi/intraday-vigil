@@ -18,7 +18,7 @@ def _profile(squareoff_at, venue_squareoff_at, min_lead=240):
 
 
 def test_default_nse_profile_has_a_real_head_start():
-    assert NSE.squareoff_at == time(15, 5)
+    assert NSE.squareoff_at == time(15, 0)
     assert NSE.venue_squareoff_at == time(15, 10)
 
 
@@ -52,12 +52,13 @@ def test_time_alerts_derive_from_squareoff_at_not_hardcoded():
     assert "14:50" in alerts["alert_1445"][1]
 
 
-def test_time_alerts_match_original_hardcoded_defaults():
-    """The default NSE profile must reproduce exactly what used to be hand-typed."""
+def test_time_alerts_match_current_defaults():
+    """The default NSE profile's derived alerts must match its current squareoff_at
+    (15:00, preponed from 15:05 — see docs/research/squareoff-timing.md)."""
     alerts = NSE.time_alerts()
     assert alerts["alert_1400"] == (
-        time(14, 0), "1h 5m to auto-squareoff (15:05). Review open positions.")
+        time(13, 55), "1h 5m to auto-squareoff (15:00). Review open positions.")
     assert alerts["alert_1430"] == (
-        time(14, 30), "35 min left. No new entries from now. Consider exiting losers.")
-    assert alerts["alert_1445"][0] == time(14, 45)
-    assert "15:05" in alerts["alert_1445"][1] and "15:10" in alerts["alert_1445"][1]
+        time(14, 25), "35 min left. No new entries from now. Consider exiting losers.")
+    assert alerts["alert_1445"][0] == time(14, 40)
+    assert "15:00" in alerts["alert_1445"][1] and "15:10" in alerts["alert_1445"][1]

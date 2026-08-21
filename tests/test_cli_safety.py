@@ -229,7 +229,7 @@ SATURDAY = datetime(2026, 8, 22, tzinfo=IST)  # a real Saturday
 def _fixed_market_hours(monkeypatch):
     from vigil import config
     monkeypatch.setattr(config, "MARKET_OPEN", time(9, 15))
-    monkeypatch.setattr(config, "SQUAREOFF_AT", time(15, 5))
+    monkeypatch.setattr(config, "SQUAREOFF_AT", time(15, 0))
     monkeypatch.setattr(config, "MARKET_CLOSE", time(15, 30))
     monkeypatch.setattr(daemon.clock, "load_holidays", lambda: set())
 
@@ -238,7 +238,7 @@ def test_startup_message_before_market_open(_fixed_market_hours):
     now = MONDAY.replace(hour=8, minute=0)
     msg = daemon._startup_message("LIVE", 111, now, force=False)
     assert "Waiting for the 09:15 bell" in msg
-    assert "Squares off at 15:05" in msg
+    assert "Squares off at 15:00" in msg
 
 
 def test_startup_message_during_market_hours_does_not_claim_it_is_waiting(_fixed_market_hours):
@@ -253,7 +253,7 @@ def test_startup_message_during_market_hours_does_not_claim_it_is_waiting(_fixed
 def test_startup_message_past_squareoff_before_close(_fixed_market_hours):
     now = MONDAY.replace(hour=15, minute=10)
     msg = daemon._startup_message("LIVE", 111, now, force=False)
-    assert "Past today's 15:05 squareoff time" in msg
+    assert "Past today's 15:00 squareoff time" in msg
 
 
 def test_startup_message_after_close(_fixed_market_hours):
@@ -279,7 +279,7 @@ def test_start_reports_a_clean_immediate_exit_instead_of_a_false_success(
         monkeypatch, tmp_path, capsys):
     """Market closed + no --force makes `monitor` exit 0 almost instantly (see
     monitor.py's _run_loop). cmd_start's old crash-check only caught a NON-zero exit, so
-    it printed the generic "Daemon started... squares off at 15:05" success line for a
+    it printed the generic "Daemon started... squares off at 15:00" success line for a
     process that, by the time that line hit the screen, no longer existed."""
     _wire_common_daemon_mocks(monkeypatch, tmp_path)
     monkeypatch.setattr(daemon, "_daemon_pid", lambda: None)
