@@ -136,8 +136,14 @@ class GuardedBroker:
     # ---------- mutations (dry-run gated) ----------
 
     def _dry(self, action: str, **params) -> str:
+        # `symbol` is both a positional arg to emit() AND a key callers put in **params
+        # (e.g. place_market_order(symbol=..., ...)) — passing it both ways at once used
+        # to raise "emit() got multiple values for argument 'symbol'" the moment any
+        # --dry-run call fired, discovered live when a dry-run add was attempted mid-
+        # session and found to be broken. Pop it out before spreading the rest.
         self._dry_seq += 1
-        self.events.emit("DRY_RUN_INTENT", params.get("symbol"), action=action, **params)
+        symbol = params.pop("symbol", None)
+        self.events.emit("DRY_RUN_INTENT", symbol, action=action, **params)
         return f"DRY-{self._dry_seq}"
 
     def place_market_order(self, symbol: str, transaction_type: str, quantity: int,
