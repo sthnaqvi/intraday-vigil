@@ -60,6 +60,10 @@ def main(argv: list[str] | None = None) -> int:
     sp.set_defaults(fn=cmd_start)
 
     sp = sub.add_parser("stop", help="stop the background daemon (broker SLs stay active)")
+    sp.add_argument("--i-know", action="store_true",
+                    help="stop anyway even inside the pre-squareoff window with open "
+                         "positions — see the refusal message for why this is asked for "
+                         "explicitly")
     sp.set_defaults(fn=cmd_stop)
 
     sp = sub.add_parser("restart",
@@ -71,6 +75,9 @@ def main(argv: list[str] | None = None) -> int:
     sp.add_argument("--paper", action="store_true", help="paper trading — see `vigil start --help`")
     sp.add_argument("--allow-silent", action="store_true",
                     help="start live even if no desktop notifier is available")
+    sp.add_argument("--i-know", action="store_true",
+                    help="restart anyway even inside the pre-squareoff window with open "
+                         "positions — see `vigil stop --help`")
     sp.set_defaults(fn=cmd_restart)
 
     sp = sub.add_parser("login", help="daily Kite login (skips browser if token still valid)")

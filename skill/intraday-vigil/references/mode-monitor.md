@@ -99,6 +99,15 @@ instead of the exchange's forced one — disabling it without arming a replaceme
 exit-trigger price, or a firm manual-exit time, decided *before* the daemon comes back down)
 just hands the exit to the broker's forced closure a few minutes later, at whatever price it
 happens to be. That's not "letting it run" in any meaningful sense — it's the same uncontrolled
-outcome, just delayed. Cost a real ₹1,046 on 2026-08-20 doing exactly this — see
-`docs/incidents/2026-08-20-session.md`. Always pair "stop the scripted exit" with an explicit
-answer to "then what closes it, and when."
+outcome, just delayed. This has now cost real money once (₹1,046, 2026-08-20) and been saved
+by luck once (2026-08-21, same decision, price happened to drift the other way during the
+gap) — see `docs/incidents/discipline-and-process.md` ("A scheduled exit was disabled
+without a replacement plan — again, on a later session"). Always pair "stop the scripted
+exit" with an explicit answer to "then what closes it, and when."
+
+**`vigil stop` now enforces this itself** — it refuses (with a clear message naming the
+open positions) inside the window from `STOP_REFUSAL_LEAD_MIN` minutes before
+`SQUAREOFF_AT` through `BROKER_SQUAREOFF_AT`, unless `--i-know` is passed. A refusal here
+is not an obstacle to route around by reaching for `--i-know` on request — treat it the
+same as the entry gate: surface *why* it refused, and get an explicit "then what closes it,
+and when" answer from the user before using the override, not instead of asking.

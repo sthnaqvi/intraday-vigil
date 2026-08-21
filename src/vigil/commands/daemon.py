@@ -6,7 +6,7 @@ import signal
 import subprocess
 import sys
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 from .. import auth, clock, config, notify
 from ..monitor import MonitorLoop
@@ -104,11 +104,41 @@ def cmd_start(args) -> int:
     return 0
 
 
+def _squareoff_window_block(now: datetime) -> str | None:
+    """None if `vigil stop` is fine to run right now; otherwise the refusal message.
+    Only blocks when there are open tracked positions — an idle daemon has nothing to
+    hand off to the broker's forced closure in the first place."""
+    window_start = (datetime.combine(now.date(), config.SQUAREOFF_AT)
+                    - timedelta(minutes=config.STOP_REFUSAL_LEAD_MIN)).time()
+    if not (window_start <= now.time() < config.BROKER_SQUAREOFF_AT):
+        return None
+    session = SessionState.load_or_create()
+    if not session.positions:
+        return None
+    syms = ", ".join(session.positions)
+    return (
+        f"{now.strftime('%H:%M:%S')} is inside the pre-squareoff window "
+        f"({window_start.strftime('%H:%M')}-{config.BROKER_SQUAREOFF_AT.strftime('%H:%M')}) "
+        f"with open positions ({syms}). Stopping now hands the exit to the broker's own "
+        f"forced closure instead of the daemon's controlled one — this has cost real money "
+        f"before (docs/incidents/discipline-and-process.md). Either let it run to "
+        f"{config.SQUAREOFF_AT.strftime('%H:%M')}, place a manual exit first "
+        f"(`vigil exit SYMBOL` or `vigil squareoff`), or pass --i-know to stop anyway."
+    )
+
+
 def cmd_stop(args) -> int:
     pid = _daemon_pid()
     if pid is None:
         print("No daemon running.")
         return 0
+
+    if not getattr(args, "i_know", False) and not is_paper_mode():
+        blocked = _squareoff_window_block(clock.now_ist())
+        if blocked:
+            print(f"REFUSED — {blocked}", file=sys.stderr)
+            return 3
+
     os.kill(pid, signal.SIGINT)
     for _ in range(20):
         time.sleep(0.25)

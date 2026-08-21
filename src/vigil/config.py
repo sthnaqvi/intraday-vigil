@@ -89,6 +89,13 @@ NO_NEW_ENTRIES_AFTER = NSE.no_new_entries_after
 BROKER_SQUAREOFF_AT = NSE.venue_squareoff_at
 SQUAREOFF_AT = NSE.squareoff_at
 TIME_ALERTS = NSE.time_alerts()
+# `vigil stop` refuses (absent --i-know) inside [SQUAREOFF_AT - this, BROKER_SQUAREOFF_AT)
+# while positions are open — stopping the daemon in that window has handed two separate
+# sessions' exits to the broker's own forced closure instead of the daemon's controlled
+# one (2026-08-20: cost ₹1,046; 2026-08-21: cost nothing only because price happened to
+# drift favorably during the gap). A documented rule that only survives by being
+# remembered mid-session failed twice; see docs/incidents/discipline-and-process.md.
+STOP_REFUSAL_LEAD_MIN = 15
 
 # API behaviour
 # Zerodha rejects API market orders (MARKET, and SL-M modifies) without market

@@ -97,7 +97,7 @@ Brokerage, STT, and exchange charges are deducted from free cash, not from the m
 blocked for the position, so sizing right up to the exact available-margin figure leaves
 nothing to cover the exit that will eventually have to fire (the SL, the square-off, or a
 manual close) — a real insufficient-funds notification from this exact gap forced this rule
-in (see `docs/incidents/2026-08-20-session.md`). Hold back a fixed reserve — a flat rupee
+in (see `docs/incidents/discipline-and-process.md`). Hold back a fixed reserve — a flat rupee
 amount comfortably above a few round-trips' worth of charges, or a small percentage (1% is a
 reasonable default) — before computing `qty`, on every slot, every time:
 ```
