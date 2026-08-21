@@ -172,6 +172,17 @@ class PaperAdapter:
     def instruments(self, exchange: str = "NSE") -> list[dict]:
         return []  # no real instrument master — paper mode has no WebSocket ticker to feed
 
+    def order_margins(self, symbol: str, transaction_type: str, quantity: int,
+                      exchange: str = "NSE", product: str = "MIS",
+                      order_type: str = "MARKET") -> dict:
+        # No real RMS/exposure margin engine in paper mode — approximate with a flat 20%
+        # (5x) of order value so callers exercising the margin-calculator path (instead of
+        # guessing a leverage multiplier — see rules.max_affordable_qty) get a plausible,
+        # consistent number rather than a crash. Not a claim about any real instrument's
+        # actual leverage.
+        price = self._prices.get(symbol, 0.0)
+        return {"total": round(price * quantity * 0.20, 2)}
+
     def historical_daily(self, instrument_token, from_date, to_date) -> list[dict]:
         return []  # no PDH/PDL history; the daemon falls back to today's day-H/L
 

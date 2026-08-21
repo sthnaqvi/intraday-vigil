@@ -183,10 +183,12 @@ def execute(trigger: Trigger, broker: GuardedBroker, events: EventLog, session: 
         entry_id = execution.place_entry(broker, trigger.symbol, trigger.dir, trigger.qty)
         trigger.entry_order_id = entry_id
     except Exception as e:
+        hint = execution.margin_rejection_hint(broker, trigger.symbol, trigger.dir, e)
         trigger.status = FAILED
-        trigger.detail = f"entry order failed: {e!r}"
-        events.emit("TRIGGER_ENTRY_FAILED", trigger.symbol, error=repr(e))
-        alert_dialog(f"{trigger.symbol}: ENTRY ORDER FAILED\n\n{e}")
+        trigger.detail = f"entry order failed: {e!r}" + (f" | {hint}" if hint else "")
+        events.emit("TRIGGER_ENTRY_FAILED", trigger.symbol, error=repr(e), margin_hint=hint)
+        alert_dialog(f"{trigger.symbol}: ENTRY ORDER FAILED\n\n{e}"
+                     + (f"\n\n{hint}" if hint else ""))
         return False
 
     # Resolve the real fill; fall back to the tick price if the position is not visible yet.

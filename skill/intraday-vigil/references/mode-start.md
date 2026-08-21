@@ -230,11 +230,25 @@ For each selected stock:
    never a surprise — but the sizing input is available margin, not a risk budget.
 
    **If a broker rejects an order for an unexpected margin amount, measure before
-   theorizing.** Call the broker's own margin-calculator endpoint for that exact order
-   first — don't guess at a leverage or policy explanation and resize based on the guess.
-   A misdiagnosed rejection on 2026-08-20 led to a position running at under a fifth of the
-   size the (unused, available) calculator actually supported — see
-   `docs/incidents/2026-08-20-session.md`.
+   theorizing — and measure the right thing.** This has now been misdiagnosed twice on two
+   different sessions, both times the same way: dividing the rejection's *total* required
+   margin by the attempted quantity, which produces a per-share figure that looks like the
+   instrument lost most of its leverage (5x reading as ~2x). It hadn't. A margin
+   rejection's own numbers already tell you the real gap: **shortfall ÷ leverage** is how
+   much *less* order value to place — a rejection short by a few hundred rupees on a
+   multi-lakh order means cut the quantity by a fraction of one share, not by two-thirds
+   of the whole order. Reaching for "the leverage must have changed" instead of that
+   division is the mistake, every time it's happened.
+
+   The daemon now removes the guess entirely: `vigil add`/`vigil enter` (and armed
+   triggers) call the broker's own order-margin calculator on any insufficient-funds
+   rejection and print the real affordable quantity directly in the error — read that
+   number, don't derive one. If you're ever computing it yourself anyway (the calculator
+   unreachable, a different broker with no equivalent), use shortfall ÷ leverage, never
+   total-required ÷ attempted-quantity. See `docs/incidents/verification-gaps.md`
+   ("A margin rejection was misread by dividing the wrong numbers") for what guessing cost
+   both times — the second one was the exact difference between that session closing red
+   and closing green.
 
    **Allocation:** do not dump the full budget into one name while another trigger is
    armed. Weight the confirmed setup and reserve for armed slots; ask the user if the

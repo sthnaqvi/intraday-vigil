@@ -36,6 +36,17 @@ class KiteAdapter:
     def instruments(self, exchange: str = "NSE") -> list[dict]:
         return self.kite.instruments(exchange)
 
+    def order_margins(self, symbol: str, transaction_type: str, quantity: int,
+                      exchange: str = "NSE", product: str = "MIS",
+                      order_type: str = "MARKET") -> dict:
+        result = self.kite.order_margins([{
+            "exchange": exchange, "tradingsymbol": symbol,
+            "transaction_type": transaction_type, "variety": "regular",
+            "product": product, "order_type": order_type,
+            "quantity": quantity, "price": 0, "trigger_price": 0,
+        }])
+        return result[0] if result else {}
+
     def historical_daily(self, instrument_token: int, from_date: date, to_date: date) -> list[dict]:
         return self.kite.historical_data(instrument_token, from_date, to_date, "day")
 

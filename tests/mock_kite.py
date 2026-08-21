@@ -22,6 +22,9 @@ class MockKite:
             "16448 : Difference between limit price and trigger price is beyond "
             "permissible range"
         )
+        self._available_margin = 1_000_000.0
+        self._margin_fraction = 0.2  # 5x leverage by default; set_margin_leverage() to change
+        self.reject_orders_over_available = False  # opt in for margin-rejection tests
 
     # ---------- scripting helpers ----------
 
@@ -31,6 +34,13 @@ class MockKite:
             "ohlc": {"open": open_ or ltp, "high": high or ltp,
                      "low": low or ltp, "close": close or ltp},
         }
+
+    def set_available_margin(self, amount: float):
+        self._available_margin = amount
+
+    def set_margin_leverage(self, leverage: float):
+        """5x leverage -> 20% of order value required as margin, etc."""
+        self._margin_fraction = 1.0 / leverage
 
     def set_tick_size(self, symbol: str, tick: float):
         """Script a non-default exchange tick for a symbol (most NSE equities are 0.05;
@@ -84,6 +94,18 @@ class MockKite:
     def profile(self):
         return {"user_id": "TEST"}
 
+    def margins(self):
+        return {"equity": {"available": {"live_balance": self._available_margin}}}
+
+    def order_margins(self, params):
+        out = []
+        for p in params:
+            price = self._quotes.get(f'{p["exchange"]}:{p["tradingsymbol"]}', {}) \
+                .get("last_price", 0.0)
+            total = round(price * p["quantity"] * self._margin_fraction, 2)
+            out.append({"total": total})
+        return out
+
     def quote(self, symbols):
         return {s: dict(self._quotes[s]) for s in symbols if s in self._quotes}
 
@@ -126,6 +148,16 @@ class MockKite:
             "tradingsymbol": tradingsymbol, "transaction_type": transaction_type,
             "quantity": quantity, "order_type": order_type, "trigger_price": trigger_price,
         })
+        if self.reject_orders_over_available and order_type == "MARKET":
+            price = self._quotes.get(f"{exchange}:{tradingsymbol}", {}).get("last_price", 0.0)
+            required = round(price * quantity * self._margin_fraction, 2)
+            if required > self._available_margin:
+                from kiteconnect.exceptions import GeneralException
+                short = required - self._available_margin
+                raise GeneralException(
+                    f"Insufficient funds. Margin required: {required}. "
+                    f"Margin available: {self._available_margin}. Add {short:.2f} to "
+                    "place this order.")
         if order_type == "SL-M":
             return self.add_sl_order(tradingsymbol, transaction_type, trigger_price, quantity)
         # MARKET fills instantly and moves quantity by the signed amount, so the same

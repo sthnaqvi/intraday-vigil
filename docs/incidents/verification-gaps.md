@@ -130,3 +130,34 @@ eventual full close records later. The remaining position's phase and breakeven 
 left untouched, since a partial exit isn't a new trade. Three regression tests cover the
 P&L being recorded correctly, phase state surviving the partial, and a later full close not
 double-counting quantity already recorded by the partial.
+
+## A margin rejection was misread by dividing the wrong numbers
+
+A broker rejection reported the total margin required for an order and how much more was
+needed to cover it — a small shortfall relative to the whole order. The diagnosis divided
+the *entire* reported requirement by the order's quantity, producing a per-share figure far
+higher than expected, and concluded from that the instrument's leverage must have dropped
+sharply. It hadn't. The rejection's own shortfall figure, divided by the real leverage,
+gave the actual gap — a small fraction of one share's worth of value, not evidence the
+leverage assumption was wrong at all. The resulting order was cut by roughly two-thirds of
+what the evidence actually supported, on a trade that already existed and needed no fresh
+justification to size correctly.
+
+This is the same failure mode as the calculator-avoidance entry above — a plausible-looking
+number produced without checking it against what the rejection actually implied — just with
+the arithmetic error one level deeper: not skipping the measurement, but misreading it once
+obtained.
+
+The trade this happened on was already working in the position's favor before the
+mistake — the scale-in itself was the right call, moving the average entry toward where
+price ultimately closed. Run against the day's actual closing price, the undersized order
+was the entire difference between that session ending at a small loss and ending at a
+small profit — not a rounding error against an otherwise-fine outcome, but the one number
+that decided which side of zero the day landed on. Worth stating plainly, since a first
+pass at reviewing this same day scored it as a repeat-pattern footnote and had to be
+corrected after the fact for missing exactly this.
+
+**Fix (process, not code):** when a broker rejects an order for an unexpected amount,
+compute `shortfall ÷ leverage` first — that's the additional order value needed. Only
+conclude the leverage assumption itself was wrong if that number is wildly inconsistent
+with the rejection's own figures.

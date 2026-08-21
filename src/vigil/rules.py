@@ -135,6 +135,25 @@ def initial_sl_price(entry: float, sl_pct: float, direction: Direction,
     return round_to_tick_favor(guarded, direction, tick)
 
 
+def qty_from_margin(available_margin: float, per_share_margin: float,
+                    buffer_pct: float = 0.01) -> int:
+    """How many shares `available_margin` affords at `per_share_margin` each, holding
+    back `buffer_pct` for the transaction costs a later exit needs to cover (never size
+    against 100% of available margin — docs/sl-rules.md's position-sizing section).
+
+    Pure arithmetic — the caller gets `per_share_margin` from the broker's own
+    order-margin calculator (this module does no I/O), never from an assumed leverage
+    multiplier. A ₹673.20 shortfall on a rejected order was once misread as "leverage
+    dropped from 5x to ~2x" by dividing the rejection's *total* required margin by the
+    attempted quantity, instead of dividing the *shortfall* by the real leverage — cost
+    real position size on two separate sessions. See
+    docs/incidents/verification-gaps.md."""
+    if per_share_margin <= 0:
+        return 0
+    sizing_capital = available_margin * (1 - buffer_pct)
+    return max(int(sizing_capital / per_share_margin), 0)
+
+
 def near_sl(ltp: float, trigger: float, threshold: float = config.NEAR_SL_PCT) -> bool:
     return trigger > 0 and abs(ltp - trigger) / trigger < threshold
 

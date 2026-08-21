@@ -131,7 +131,14 @@ def cmd_add(args) -> int:
             print("Aborted.")
             return 1
 
-    execution.place_entry(broker, symbol, direction, args.qty)
+    try:
+        execution.place_entry(broker, symbol, direction, args.qty)
+    except Exception as e:
+        hint = execution.margin_rejection_hint(broker, symbol, direction, e)
+        print(f"FAILED: {e}", file=sys.stderr)
+        if hint:
+            print(hint, file=sys.stderr)
+        return 4
 
     time.sleep(2)
     pos = _open_position(broker, symbol) or pos

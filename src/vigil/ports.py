@@ -28,6 +28,17 @@ class BrokerClient(Protocol):
 
     def instruments(self, exchange: str = "NSE") -> list[dict[str, Any]]: ...
 
+    def order_margins(self, symbol: str, transaction_type: str, quantity: int,
+                      exchange: str = "NSE", product: str = "MIS",
+                      order_type: str = "MARKET") -> dict[str, Any]:
+        """The broker's own margin requirement for this exact order, considering existing
+        positions — the authoritative alternative to inferring a leverage multiplier from
+        a rejection message's numbers. Must return at least a `total` key (₹ margin
+        required). See docs/incidents/verification-gaps.md: guessing this from a
+        rejection's shortfall figure instead of asking directly cost real position size,
+        twice, on two separate sessions."""
+        ...
+
     def historical_daily(self, instrument_token: int, from_date: date,
                          to_date: date) -> list[dict[str, Any]]: ...
 

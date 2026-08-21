@@ -11,6 +11,7 @@ from .. import auth, config
 from .. import state as state_mod
 from ..broker import Broker
 from ..events import EventLog
+from ..execution import margin_rejection_hint  # noqa: F401 (re-exported for callers)
 from ..guard import GuardedBroker
 from ..models import Position
 from ..paper_mode import is_paper_mode, set_paper_mode  # noqa: F401 (re-exported for callers)

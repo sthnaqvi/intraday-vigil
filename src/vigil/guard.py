@@ -124,6 +124,12 @@ class GuardedBroker:
     def instruments(self, exchange: str = "NSE") -> list[dict]:
         return self._call(self.adapter.instruments, exchange)
 
+    def order_margins(self, symbol: str, transaction_type: str, quantity: int,
+                      exchange: str = "NSE", product: str = "MIS",
+                      order_type: str = "MARKET") -> dict:
+        return self._call(self.adapter.order_margins, symbol, transaction_type, quantity,
+                          exchange, product, order_type)
+
     def historical_daily(self, instrument_token: int, from_date: date, to_date: date) -> list[dict]:
         return self._call(self.adapter.historical_daily, instrument_token, from_date, to_date)
 
