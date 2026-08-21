@@ -338,3 +338,27 @@ def test_account_is_cached_so_polling_does_not_hammer_kite(monkeypatch):
     for _ in range(10):
         webui.account_snapshot()
     assert calls["n"] == 1, "the 3s poll must not become 10 Kite calls"
+
+
+# ---------- snapshot: armed triggers ----------
+
+def test_snapshot_only_shows_currently_armed_triggers(tmp_path, monkeypatch):
+    """The 'Armed triggers' panel must not resurrect cancelled/failed triggers from a
+    past session — triggers.json has no date scoping, so an unfiltered load() would."""
+    from vigil.triggers import ARMED, CANCELLED, FAILED, Trigger
+
+    monkeypatch.setattr(webui.triggers_mod, "TRIGGERS_FILE", tmp_path / "triggers.json")
+
+    live = Trigger(symbol="RELIANCE", direction="LONG", level=1315.70, side="above",
+                   qty=301, sl_pct=0.009, status=ARMED)
+    stale_cancelled = Trigger(symbol="DRREDDY", direction="LONG", level=1179.00,
+                              side="above", qty=338, sl_pct=0.009, status=CANCELLED)
+    stale_failed = Trigger(symbol="DRREDDY", direction="LONG", level=1179.00, side="above",
+                           qty=338, sl_pct=0.009, auto=True, status=FAILED)
+    webui.triggers_mod.save([live, stale_cancelled, stale_failed])
+
+    snap = webui._snapshot()
+    symbols = [t["symbol"] for t in snap["triggers"]]
+    statuses = {t["status"] for t in snap["triggers"]}
+    assert symbols == ["RELIANCE"], "cancelled/failed triggers must not appear"
+    assert statuses == {ARMED}

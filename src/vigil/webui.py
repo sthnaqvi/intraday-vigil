@@ -313,7 +313,11 @@ def _snapshot() -> dict:
         "kill_switch": snap.get("kill_switch", False),
         "realized_r_today": snap.get("realized_r_today", 0),
         "realized_pnl_today": snap.get("realized_pnl_today", 0),
-        "triggers": [t.__dict__ for t in triggers_mod.load()][-15:],
+        # Only currently-armed triggers — triggers.json is one flat file with no date
+        # scoping, so an unfiltered load() surfaces cancelled/failed entries from past
+        # sessions under a panel titled "Armed triggers". `cmd_status` (commands/info.py)
+        # already gets this right; the dashboard didn't.
+        "triggers": [t.__dict__ for t in triggers_mod.armed(triggers_mod.load())][-15:],
         "events": events,
         "skill_modes": list(SKILL_MODES),
         "log_sources": list(LOG_SOURCES),
