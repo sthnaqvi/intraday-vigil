@@ -26,6 +26,13 @@ def isolated_dirs(tmp_path, monkeypatch):
     monkeypatch.setattr(config, "STATUS_FILE", tmp_path / "data" / "status.json")
     monkeypatch.setattr(config, "RISK_FILE", tmp_path / "data" / "risk.json")
     monkeypatch.setattr(config, "HOLIDAYS_FILE", tmp_path / "data" / "holidays.txt")
+    # Same early-binding trap as triggers.py/claudelink.py below, missed when this fixture
+    # was first written: config.PID_FILE is also `DATA_DIR / "daemon.pid"` computed once at
+    # import time. Left unpatched, a test that reads or signals "the daemon's" PID reads
+    # and can act on THIS MACHINE'S real running daemon (`vigil web`/`vigil start`) instead
+    # of a hermetic fixture — found live when a real `vigil web` process was running during
+    # a test session and a full-suite run hung.
+    monkeypatch.setattr(config, "PID_FILE", tmp_path / "data" / "daemon.pid")
     monkeypatch.setattr(triggers, "TRIGGERS_FILE", tmp_path / "data" / "triggers.json")
     monkeypatch.setattr(triggers, "EXIT_TRIGGERS_FILE",
                         tmp_path / "data" / "exit_triggers.json")
