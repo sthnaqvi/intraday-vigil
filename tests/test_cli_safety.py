@@ -139,3 +139,77 @@ def test_login_clears_paper_mode(monkeypatch, tmp_path):
     monkeypatch.setattr(daemon.auth, "login", lambda **k: None)
     daemon.cmd_login(_Args(paste=False, force=False))
     assert not _shared.is_paper_mode()
+
+
+# ---------- restart ----------
+
+class _FakeProc:
+    pid = 4242
+    returncode = 0
+
+    def poll(self):
+        return None  # still running after the grace check
+
+
+def _wire_common_daemon_mocks(monkeypatch, tmp_path):
+    from vigil import config
+    monkeypatch.setattr(config, "LOGS_DIR", tmp_path / "logs")
+    monkeypatch.setattr(config, "DATA_DIR", tmp_path / "data")
+    monkeypatch.setattr(config, "PID_FILE", tmp_path / "data" / "daemon.pid")
+    monkeypatch.setattr(daemon.auth, "login", lambda **k: None)
+    monkeypatch.setattr(daemon.time, "sleep", lambda s: None)
+    monkeypatch.setattr(daemon.subprocess, "Popen", lambda cmd, **kw: _FakeProc())
+
+
+def test_restart_stops_a_running_daemon_before_starting_a_new_one(monkeypatch, tmp_path):
+    """The old process must actually be signalled and confirmed gone before a fresh
+    `monitor` loop is spawned — two daemons racing on the same position is exactly the
+    kind of double-writer bug this codebase goes out of its way to avoid elsewhere."""
+    _wire_common_daemon_mocks(monkeypatch, tmp_path)
+    state = {"sigint_sent": False}
+
+    def fake_pid():
+        return None if state["sigint_sent"] else 999
+
+    def fake_kill(pid, sig):
+        if sig == daemon.signal.SIGINT:
+            state["sigint_sent"] = True
+
+    monkeypatch.setattr(daemon, "_daemon_pid", fake_pid)
+    monkeypatch.setattr(daemon.os, "kill", fake_kill)
+
+    code = daemon.cmd_restart(
+        _Args(dry_run=False, force=False, paste=False, allow_silent=False))
+    assert code == 0
+    assert state["sigint_sent"], "must signal the old daemon before starting a new one"
+
+
+def test_restart_skips_stop_when_nothing_is_running(monkeypatch, tmp_path, capsys):
+    """No daemon to stop should mean no stop noise — just a plain start."""
+    _wire_common_daemon_mocks(monkeypatch, tmp_path)
+    monkeypatch.setattr(daemon, "_daemon_pid", lambda: None)
+    kill_calls = []
+    monkeypatch.setattr(daemon.os, "kill", lambda *a: kill_calls.append(a))
+
+    code = daemon.cmd_restart(
+        _Args(dry_run=False, force=False, paste=False, allow_silent=False))
+    assert code == 0
+    assert kill_calls == [], "nothing to signal when nothing is running"
+    assert "No daemon running" not in capsys.readouterr().out
+
+
+def test_restart_forwards_flags_to_the_new_daemon(monkeypatch, tmp_path):
+    """Same forwarding contract as `start` — restart isn't a second, weaker start."""
+    _wire_common_daemon_mocks(monkeypatch, tmp_path)
+    monkeypatch.setattr(daemon, "_daemon_pid", lambda: None)
+    captured = {}
+
+    def fake_popen(cmd, **kw):
+        captured["cmd"] = cmd
+        return _FakeProc()
+
+    monkeypatch.setattr(daemon.subprocess, "Popen", fake_popen)
+
+    daemon.cmd_restart(
+        _Args(dry_run=False, force=False, paste=False, allow_silent=True))
+    assert "--allow-silent" in captured["cmd"]

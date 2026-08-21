@@ -1,6 +1,6 @@
 """CLI: argparse wiring only. Command implementations live in commands/*.py.
 
-start | stop | login | positions | status | add-position | monitor | squareoff |
+start | stop | restart | login | positions | status | add-position | monitor | squareoff |
 enter | arm | add | exit | web | ask | protect | quote | triggers | disarm |
 arm-exit | exit-triggers | disarm-exit | paper-price | paths | skill-install
 """
@@ -20,7 +20,7 @@ from .commands.armed import (
     cmd_exit_triggers,
     cmd_triggers,
 )
-from .commands.daemon import cmd_login, cmd_monitor, cmd_start, cmd_stop
+from .commands.daemon import cmd_login, cmd_monitor, cmd_restart, cmd_start, cmd_stop
 from .commands.info import cmd_paths, cmd_positions, cmd_quote, cmd_status
 from .commands.integrations import cmd_ask, cmd_web
 from .commands.orders import (
@@ -61,6 +61,17 @@ def main(argv: list[str] | None = None) -> int:
 
     sp = sub.add_parser("stop", help="stop the background daemon (broker SLs stay active)")
     sp.set_defaults(fn=cmd_stop)
+
+    sp = sub.add_parser("restart",
+                        help="stop (if running) + start — same flags as `start`; "
+                             "resting SLs and today's tracked state are never at risk")
+    sp.add_argument("--dry-run", action="store_true", help="log intents, mutate nothing")
+    sp.add_argument("--force", action="store_true", help="run outside market hours")
+    sp.add_argument("--paste", action="store_true", help="paste-URL login fallback")
+    sp.add_argument("--paper", action="store_true", help="paper trading — see `vigil start --help`")
+    sp.add_argument("--allow-silent", action="store_true",
+                    help="start live even if no desktop notifier is available")
+    sp.set_defaults(fn=cmd_restart)
 
     sp = sub.add_parser("login", help="daily Kite login (skips browser if token still valid)")
     sp.add_argument("--paste", action="store_true",

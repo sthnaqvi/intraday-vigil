@@ -89,6 +89,23 @@ def cmd_stop(args) -> int:
     return 0
 
 
+def cmd_restart(args) -> int:
+    """`vigil stop` (if a daemon is running) then `vigil start` — the same two commands,
+    in the order that actually matters, done for you instead of left to memory.
+
+    Nothing tracked is at risk either way: every resting SL lives at the broker, not in
+    this process, so stopping never removes protection (see docs/safety.md); and today's
+    tracked positions, phases, and realised P&L ledger are written to
+    data/session-<date>.json every cycle and reloaded by SessionState.load_or_create() on
+    the way back up. `cmd_stop` also already blocks until the old process has actually
+    exited (or force-kills it after 5s) before returning, so this can't race a fresh
+    `monitor` loop starting while the old one is still shutting down.
+    """
+    if _daemon_pid() is not None:
+        cmd_stop(args)
+    return cmd_start(args)
+
+
 def cmd_login(args) -> int:
     set_paper_mode(False)  # explicit live-Kite intent ends any paper session in progress
     auth.login(paste=args.paste, force=args.force)

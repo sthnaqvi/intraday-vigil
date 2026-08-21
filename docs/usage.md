@@ -24,6 +24,7 @@ logged `DRY_RUN_INTENT` events against what you'd expect (see `docs/safety.md`).
 |---|---|
 | `vigil start [--dry-run] [--force] [--paste] [--paper] [--allow-silent]` | Morning one-shot: login if needed + background daemon |
 | `vigil stop` | Stop the daemon (broker SLs remain active) |
+| `vigil restart [--dry-run] [--force] [--paste] [--paper] [--allow-silent]` | `stop` (if running) + `start`, in the order that matters — same flags as `start`. Resting SLs live at the broker and today's tracked state is on disk either way, so this loses nothing. |
 | `vigil login [--force] [--paste]` | Just the login step; `--paste` if the browser redirect can't work. Also ends any paper session. |
 | `vigil monitor [--dry-run] [--force] [--paper] [--allow-silent]` | The loop in the foreground (what `start` backgrounds) |
 | `vigil paths [--json]` | Where this install keeps its state (VIGIL_HOME/XDG resolution) |
