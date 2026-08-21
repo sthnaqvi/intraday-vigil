@@ -262,16 +262,41 @@ async function liveLoad(){
   }catch(e){ $('livefoot').textContent='live log unavailable: '+e; }
 }
 
-async function tick(){
-  try{
-    const r=await fetch('/api/state');
-    render(await r.json());
-  }catch(e){
-    $('daemon').innerHTML='<span class="pill bad">UI lost the server</span>';
+/* ---------- live state: SSE, not a 3s poll ----------
+   /api/stream holds one connection open and pushes a fresh snapshot every ~1s — render()
+   runs on every push instead of waiting on a fixed browser-side interval. EventSource
+   reconnects on a drop by itself; there's no manual retry/backoff to write. tick() still
+   exists, on its own slower interval below, but only for the housekeeping that used to
+   piggyback on the same timer as the state fetch — the raw-logs pane and the live-log
+   dock, neither of which needs push freshness. */
+function startLiveStream(){
+  if(!window.EventSource){
+    // Only for a browser old enough to lack EventSource entirely — not the reconnect
+    // path, which EventSource already handles on its own.
+    tick(); setInterval(tick, 3000);
+    return;
   }
+  const es = new EventSource('/api/stream');
+  es.onmessage = e => {
+    try{ render(JSON.parse(e.data)); }
+    catch(err){ /* one malformed push is not worth surfacing — the next one fixes it */ }
+  };
+  es.onerror = () => {
+    if(es.readyState === EventSource.CONNECTING){
+      $('daemon').innerHTML='<span class="pill warnp">Reconnecting…</span>';
+    }else if(es.readyState === EventSource.CLOSED){
+      $('daemon').innerHTML='<span class="pill bad">UI lost the server</span>';
+    }
+  };
+}
+
+async function tick(){
   if($('p_logs').classList.contains('on') && c('log_auto')) loadLog();
   liveLoad();
 }
+startLiveStream();
+tick(); setInterval(tick, 3000);
+
 $('ask').onclick=async()=>{
   const q=v('q'); if(!q) return;
   $('ask').disabled=true;
@@ -279,4 +304,3 @@ $('ask').onclick=async()=>{
        body:JSON.stringify({question:q})}); $('q').value=''; await tick(); }
   finally{ $('ask').disabled=false; }
 };
-tick(); setInterval(tick,3000);

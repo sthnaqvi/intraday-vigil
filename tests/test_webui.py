@@ -5,6 +5,8 @@ Two things must hold no matter what the browser sends:
      in the page. A stray fetch must not be able to place a trade.
   2. Arguments are whitelisted and passed as an argv list. No shell, ever.
 """
+import json
+
 import pytest
 
 from vigil import webui
@@ -362,3 +364,54 @@ def test_snapshot_only_shows_currently_armed_triggers(tmp_path, monkeypatch):
     statuses = {t["status"] for t in snap["triggers"]}
     assert symbols == ["RELIANCE"], "cancelled/failed triggers must not appear"
     assert statuses == {ARMED}
+
+
+# ---------- /api/stream (SSE) ----------
+
+@pytest.mark.enable_socket
+def test_stream_pushes_valid_snapshots_without_blocking_other_requests(tmp_path):
+    """Real end-to-end proof, not just a unit check: a held /api/stream connection must
+    push actual JSON snapshots, and — the actual reason for the ThreadingHTTPServer swap
+    — a separate request must complete promptly while the stream is still open. On the
+    old single-threaded HTTPServer this would hang until the stream connection closed.
+
+    @enable_socket: this suite is globally --disable-socket'd so it can never reach a
+    real broker — but this test only ever touches its own loopback server, the same
+    guarantee `_BIND_HOST = "127.0.0.1"` gives the real dashboard, so allowing sockets
+    here doesn't weaken that guarantee anywhere else."""
+    import http.client
+    import threading
+    from http.server import ThreadingHTTPServer
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), webui.Handler)
+    srv.daemon_threads = True
+    port = srv.server_address[1]
+    thread = threading.Thread(target=srv.serve_forever, daemon=True)
+    thread.start()
+    stream_conn = None
+    state_conn = None
+    try:
+        stream_conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        stream_conn.request("GET", "/api/stream")
+        resp = stream_conn.getresponse()
+        assert resp.status == 200
+        assert "text/event-stream" in resp.getheader("Content-Type", "")
+
+        line = resp.fp.readline()
+        assert line.startswith(b"data: "), f"expected an SSE data line, got {line!r}"
+        json.loads(line[len(b"data: "):])  # must be valid JSON
+
+        # The stream connection is still open and held here — prove a different request
+        # doesn't queue up behind it.
+        state_conn = http.client.HTTPConnection("127.0.0.1", port, timeout=5)
+        state_conn.request("GET", "/api/state")
+        state_resp = state_conn.getresponse()
+        assert state_resp.status == 200
+        state_resp.read()
+    finally:
+        for c in (stream_conn, state_conn):
+            if c is not None:
+                c.close()
+        srv.shutdown()
+        srv.server_close()
+        thread.join(timeout=5)

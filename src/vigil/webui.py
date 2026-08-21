@@ -19,9 +19,10 @@ import os
 import re
 import subprocess
 import sys
+import threading
 import time
 from datetime import datetime
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
 from pathlib import Path
 from urllib.parse import parse_qs, urlparse
 
@@ -72,11 +73,17 @@ LOG_SOURCES = {
 }
 
 
-# Profile never changes within a session; margins do, but not every 3 seconds. Without
-# these caches the dashboard's own polling would make ~1,200 Kite calls an hour.
+# Profile never changes within a session; margins do, but not every few seconds. Without
+# these caches the dashboard's own polling would make ~1,200+ Kite calls an hour.
 ACCOUNT_TTL_S = 20
 _profile_cache: dict | None = None
 _account_cache: dict = {"ts": 0.0, "data": None}
+# Only needed once requests can run concurrently (ThreadingHTTPServer, for /api/stream) —
+# a plain HTTPServer handled one request at a time and this cache's read-check-then-write
+# was never actually racy. Cheap to hold; the alternative is two threads both seeing the
+# cache as stale at once and both making a redundant Kite call, not corruption, but no
+# reason to leave even that on the table now that it's a real possibility.
+_account_lock = threading.Lock()
 
 
 def account_snapshot(force: bool = False) -> dict:
@@ -89,40 +96,41 @@ def account_snapshot(force: bool = False) -> dict:
         return {"ok": True, "paper": True, "client_id": "PAPER",
                 "name": "simulated account, no real money", "broker": "paper",
                 "available": None}
-    now = time.monotonic()
-    if not force and _account_cache["data"] and now - _account_cache["ts"] < ACCOUNT_TTL_S:
-        return _account_cache["data"]
-    try:
-        from .auth import get_kite
-        kite = get_kite()
-        if _profile_cache is None:
-            _profile_cache = kite.profile()
-        prof = _profile_cache or {}
-        eq = (kite.margins() or {}).get("equity", {}) or {}
-        avail, util = eq.get("available", {}) or {}, eq.get("utilised", {}) or {}
-        # Kite often reports available.cash as 0 with the real figure in live_balance.
-        live = avail.get("live_balance")
-        if not live:
-            live = avail.get("cash") or eq.get("net")
-        data = {
-            "ok": True,
-            "client_id": prof.get("user_id"),
-            "name": prof.get("user_name"),
-            "broker": prof.get("broker"),
-            "email": prof.get("email"),
-            "exchanges": prof.get("exchanges") or [],
-            "products": prof.get("products") or [],
-            "net": eq.get("net"),
-            "available": live,
-            "opening": avail.get("opening_balance"),
-            "used": util.get("debits"),
-            "m2m_unrealised": util.get("m2m_unrealised"),
-            "m2m_realised": util.get("m2m_realised"),
-        }
-    except Exception as e:
-        data = {"ok": False, "error": f"{type(e).__name__}: {e}"}
-    _account_cache.update(ts=now, data=data)
-    return data
+    with _account_lock:
+        now = time.monotonic()
+        if not force and _account_cache["data"] and now - _account_cache["ts"] < ACCOUNT_TTL_S:
+            return _account_cache["data"]
+        try:
+            from .auth import get_kite
+            kite = get_kite()
+            if _profile_cache is None:
+                _profile_cache = kite.profile()
+            prof = _profile_cache or {}
+            eq = (kite.margins() or {}).get("equity", {}) or {}
+            avail, util = eq.get("available", {}) or {}, eq.get("utilised", {}) or {}
+            # Kite often reports available.cash as 0 with the real figure in live_balance.
+            live = avail.get("live_balance")
+            if not live:
+                live = avail.get("cash") or eq.get("net")
+            data = {
+                "ok": True,
+                "client_id": prof.get("user_id"),
+                "name": prof.get("user_name"),
+                "broker": prof.get("broker"),
+                "email": prof.get("email"),
+                "exchanges": prof.get("exchanges") or [],
+                "products": prof.get("products") or [],
+                "net": eq.get("net"),
+                "available": live,
+                "opening": avail.get("opening_balance"),
+                "used": util.get("debits"),
+                "m2m_unrealised": util.get("m2m_unrealised"),
+                "m2m_realised": util.get("m2m_realised"),
+            }
+        except Exception as e:
+            data = {"ok": False, "error": f"{type(e).__name__}: {e}"}
+        _account_cache.update(ts=now, data=data)
+        return data
 
 
 def read_log(src: str, lines: int = 300) -> dict:
@@ -331,9 +339,21 @@ def _snapshot() -> dict:
     }
 
 
+# How often the SSE stream re-checks and re-sends the snapshot. Sending unconditionally
+# on every tick (rather than diffing against the last payload and only pushing on a real
+# change) is a deliberate simplification: this is one local user, not a fan-out to many
+# clients, so the bandwidth an unconditional push costs is irrelevant — and it keeps
+# daemon.age_s/now ticking accurately on screen between real changes for free, without a
+# second mechanism to keep those fields live. Still far cheaper than the old 3s poll: one
+# held connection, no repeated HTTP handshake/headers per update.
+STREAM_TICK_S = 1.0
+
+
 class Handler(BaseHTTPRequestHandler):
     # /api/state and /api/logs poll every few seconds. Logging them would add ~1,700
-    # lines an hour and bury the requests that actually change something.
+    # lines an hour and bury the requests that actually change something. /api/stream is
+    # one long-lived connection, not repeated requests, so it doesn't have that problem —
+    # left out of this tuple on purpose, its open/close is worth an audit line.
     POLLING = ("/api/state", "/api/logs")
 
     def log_message(self, fmt, *a):
@@ -375,6 +395,30 @@ class Handler(BaseHTTPRequestHandler):
         except json.JSONDecodeError:
             return None
 
+    def _stream_state(self) -> None:
+        """Server-Sent Events: push a fresh snapshot every STREAM_TICK_S instead of
+        making the browser poll on a fixed interval. Plain HTTP — a held chunked
+        response with a text/event-stream content type — not a second protocol: no
+        handshake or frame format to hand-roll the way a WebSocket would need, and the
+        browser's native EventSource reconnects on its own after a drop, no client-side
+        retry logic needed either. Requires ThreadingHTTPServer (see serve()); on a
+        plain HTTPServer this one held connection would block every other request —
+        every dashboard button — for as long as any tab stayed open.
+        """
+        self.send_response(200)
+        self.send_header("Content-Type", "text/event-stream; charset=utf-8")
+        self.send_header("Cache-Control", "no-store, no-cache, must-revalidate, max-age=0")
+        self.send_header("Connection", "keep-alive")
+        self.end_headers()
+        try:
+            while True:
+                payload = json.dumps(_snapshot())
+                self.wfile.write(f"data: {payload}\n\n".encode())
+                self.wfile.flush()
+                time.sleep(STREAM_TICK_S)
+        except (BrokenPipeError, ConnectionResetError, ConnectionAbortedError):
+            pass  # the browser navigated away or closed the tab — not an error
+
     def do_GET(self):
         path = urlparse(self.path).path
         if path == "/":
@@ -386,6 +430,8 @@ class Handler(BaseHTTPRequestHandler):
             self._send(200, (STATIC_DIR / name).read_bytes(), _CONTENT_TYPES[name])
         elif path == "/api/state":
             self._send(200, json.dumps(_snapshot()).encode(), "application/json")
+        elif path == "/api/stream":
+            self._stream_state()
         elif path == "/api/logs":
             qs = parse_qs(urlparse(self.path).query)
             src = (qs.get("src") or [""])[0]
@@ -443,7 +489,12 @@ def serve(port: int = 8765) -> None:
     # "web" too — not just the subprocesses it spawns.
     os.environ[audit.SOURCE_ENV] = "web"
     audit.action("web.serve", host=_BIND_HOST, port=port, ui_version=_ui_version())
-    srv = HTTPServer((_BIND_HOST, port), Handler)
+    # ThreadingHTTPServer, not HTTPServer: /api/stream holds one connection open for as
+    # long as a browser tab stays on the page. On a single-threaded server that one
+    # connection would block every other request — every dashboard button click — for
+    # as long as it's open, not just slow it down.
+    srv = ThreadingHTTPServer((_BIND_HOST, port), Handler)
+    srv.daemon_threads = True  # a lingering /api/stream connection must not block shutdown
     # flush=True: stdout is fully buffered (not line-buffered) whenever it isn't a TTY —
     # e.g. `vigil web > web.log 2>&1 &`, exactly how a backgrounded dashboard normally
     # runs. Without an explicit flush, this message can sit unwritten in the buffer for
