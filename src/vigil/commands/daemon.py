@@ -86,7 +86,7 @@ def cmd_start(args) -> int:
             return proc.returncode
         # A CLEAN exit this fast, with no crash, is almost always "market is closed and
         # --force wasn't passed" (see monitor.py's _run_loop). Printing the generic
-        # "Daemon started... squares off at 15:05" success message here would be false —
+        # "Daemon started... squares off at 15:00" success message here would be false —
         # there is no daemon anymore by the time that line hits the screen.
         print(f"Daemon exited immediately (market closed, no --force):\n{tail}",
               file=sys.stderr)
