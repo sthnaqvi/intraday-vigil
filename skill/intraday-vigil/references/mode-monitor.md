@@ -42,7 +42,7 @@ the user asks. (Polling for other reasons — e.g. confirming an action landed �
 5. If fresh, render the snapshot:
 
 ```
-⏱ 10:47 AM — SL Daemon Snapshot (as_of 10:46:32 · cycle 47 · live · 150s cadence)
+⏱ 10:47 AM — SL Daemon Snapshot (as_of 10:46:32 · check 812 · live · tick-driven)
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 INDIGO      ▲ ₹4,210  +1.8R  🔄 Phase 3 — trailing, SL ₹4,126 (2.0% trail)
 DEEPAKFERT  ▲ ₹692    +0.6R  🔒 Phase 1 — SL untouched at ₹685

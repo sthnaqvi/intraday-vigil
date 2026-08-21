@@ -134,11 +134,9 @@ def test_breakeven_moves_to_entry_and_respects_guard():
 
 # ---------- cadence / misc ----------
 
-def test_near_sl_and_cycle_interval():
+def test_near_sl():
     assert rules.near_sl(100.4, 100.0)
     assert not rules.near_sl(101.0, 100.0)
-    assert rules.cycle_interval(True) == 90
-    assert rules.cycle_interval(False) == 150
 
 
 def test_realized_r_signs():
@@ -158,15 +156,16 @@ def test_time_actions_fire_once_each():
                                                "squareoff"}) == []
 
 
-def test_seconds_until_next_action_clamps_below_a_flat_cycle_interval():
-    """The regression this exists for: a cycle finishing just before squareoff must not
-    sleep a flat 150s straight past it."""
+def test_seconds_until_next_action_clamps_below_the_loop_tick():
+    """The regression this exists for: a check finishing just before squareoff must not
+    sleep straight past it, even though the run loop's own tick is already short."""
+    from vigil import config
+
     dt = lambda h, m, s=0: datetime(2026, 8, 17, h, m, s, tzinfo=IST)  # noqa: E731
-    # squareoff at 15:05; cycle finishes at 15:03:30 -> 90s left, less than the 150s a
-    # flat CYCLE_NORMAL_S interval would pick.
-    s = rules.seconds_until_next_action(dt(15, 3, 30), set())
-    assert s == 90
-    assert min(rules.cycle_interval(False), max(s, 1)) == 90
+    # squareoff at 15:05; a check finishes at 15:04:57 -> 3s left, less than LOOP_TICK_S.
+    s = rules.seconds_until_next_action(dt(15, 4, 57), set())
+    assert s == 3
+    assert min(config.LOOP_TICK_S, max(s, 1)) == 3
 
 
 def test_seconds_until_next_action_skips_fired_actions():

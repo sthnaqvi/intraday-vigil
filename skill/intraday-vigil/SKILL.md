@@ -119,8 +119,11 @@ run again if the daemon is already up).
 - SL width cap: `sl_pct` above 1.5% is refused everywhere an SL is set
 - Stop-hunt buffer: 0.3% from prior-day high/low or a clear intraday swing — skill applies
   this at entry time, daemon applies it on every trail
-- Daemon cadence: ~150s standard, faster when a position is near its SL; a snapshot older
-  than 2× cadence is stale
+- Daemon cadence: SL decisions (breakeven, trail) are tick-driven — they react to price the
+  instant a tick arrives, not on a poll. Broker-truth reconciliation and qty verification
+  each run on their own short periodic cadence (~20s by default); `daemon.cycle_seconds` in
+  the snapshot reflects the run loop's own fast heartbeat (~5s) — a snapshot older than 2×
+  that is stale
 - Entry gate: `no_new_entries` / `kill_switch` in the daemon's status, plus the hard cutoff
 - Kill switch: default trigger is day realised R ≤ −2.0 (`src/vigil/config.py`)
 

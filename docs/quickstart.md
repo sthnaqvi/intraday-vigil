@@ -74,16 +74,17 @@ vigil enter DEMO --side long --qty 10 --sl-pct 1.0 --yes
 `--sl-pct 1.0` means a 1% stop — `vigil enter` computes the stop price from the current
 paper price and places both the entry and the stop atomically, same as it would against
 Kite. **This trade exists at the broker immediately** (`vigil positions` shows it right
-away) — but the background daemon only *discovers* it on its own next cycle (every ~150s
-by default), so `vigil status` and the dashboard can take up to that long to show it for
-the first time. That's not a bug or a hang; it's the same cadence the daemon polls a real
-broker at.
+away) — but the background daemon only *discovers* it on its own next reconcile pass
+(every ~20s by default, `config.RECONCILE_INTERVAL_S`), so `vigil status` and the
+dashboard can take up to that long to show it for the first time. That's not a bug or a
+hang; broker-truth reconciliation is a periodic poll (Kite has no push alternative for
+order/position state itself) — SL decisions, once a position is tracked, react to price
+the instant a tick arrives, not on a poll.
 
 ## 5. Watch the SL lifecycle run
 
-Move the price up 1% (one "R") and watch the daemon move the stop to breakeven on its
-next cycle (every ~150s, or `vigil monitor` cycles as fast as it's told to — the
-background daemon from step 2 is already doing this on its own schedule):
+Move the price up 1% (one "R") and watch the daemon move the stop to breakeven — the
+background daemon from step 2 reacts to the price change directly, no cycle to wait on:
 
 ```bash
 vigil paper-price DEMO 101.00

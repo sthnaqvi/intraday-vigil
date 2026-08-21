@@ -32,7 +32,11 @@ After computing raw sector ranks from live momentum, apply these rank shifts bas
 ## rate-event (RBI / US Fed announcement today)
 - Banking:  ±2  (direction unclear until announcement — wait, then reassess)
 - Realty:   ±1  (rate sensitive in both directions)
-- **Critical action**: Halve ALL position sizes regardless of direction. Tighten monitor to 90s cycles throughout the day.
+- **Critical action**: Halve ALL position sizes regardless of direction. SL decisions are
+  already tick-driven, not something to speed up — instead, check `vigil status --json`
+  for `daemon.broker` and recent `TICKER_CONNECTED`/`TICKER_RESUBSCRIBED` events to confirm
+  the tick feed is actually live and not silently degraded to the slower poll fallback, and
+  check in via MONITOR more often yourself through the volatile window.
 
 ## sector-news (Big news in one specific sector)
 - Affected sector: +3 (or -3 if news is negative/bearish)

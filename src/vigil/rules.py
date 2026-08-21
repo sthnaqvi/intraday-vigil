@@ -139,10 +139,6 @@ def near_sl(ltp: float, trigger: float, threshold: float = config.NEAR_SL_PCT) -
     return trigger > 0 and abs(ltp - trigger) / trigger < threshold
 
 
-def cycle_interval(any_near_sl: bool) -> int:
-    return config.CYCLE_NEAR_SL_S if any_near_sl else config.CYCLE_NORMAL_S
-
-
 def realized_r(entry: float, exit_price: float, r: float, direction: Direction) -> float:
     return profit_r(exit_price, entry, r, direction)
 
@@ -161,10 +157,10 @@ def due_time_actions(now: datetime, fired: set[str]) -> list[str]:
 
 def seconds_until_next_action(now: datetime, fired: set[str]) -> int | None:
     """Seconds until the next not-yet-fired time alert or squareoff, or None if nothing
-    remains today. The run loop clamps its sleep to this: a flat 150s cycle interval that
-    ignores the clock can sleep straight past squareoff if a cycle happens to finish just
-    before it, eating into the head start SQUAREOFF_AT is supposed to have on the broker's
-    own force-square."""
+    remains today. The run loop clamps its sleep to this: even LOOP_TICK_S's short,
+    clock-blind interval can in principle sleep straight past squareoff if a check
+    finishes just before it, eating into the head start SQUAREOFF_AT is supposed to have
+    on the broker's own force-square."""
     candidates = [t for key, (t, _msg) in config.TIME_ALERTS.items() if key not in fired]
     if "squareoff" not in fired:
         candidates.append(config.SQUAREOFF_AT)

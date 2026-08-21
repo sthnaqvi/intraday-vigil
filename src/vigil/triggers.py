@@ -263,12 +263,18 @@ class TriggerEngine:
     """
 
     def __init__(self, broker: GuardedBroker, events: EventLog, session: Any,
-                on_fire: Callable[[Trigger], None] | None = None):
+                on_fire: Callable[[Trigger], None] | None = None,
+                lock: threading.Lock | None = None):
         self.broker = broker
         self.events = events
         self.session = session
         self.on_fire = on_fire
-        self.lock = threading.Lock()
+        # Shared with MonitorLoop's own position-decision tick handler when one is passed
+        # in — a symbol can carry both an open position and an armed exit trigger, both
+        # touching the same broker order, so both paths must serialize through one lock,
+        # not two independent ones. Defaults to owning its own for any standalone caller
+        # (tests, or a TriggerEngine used without a MonitorLoop).
+        self.lock = lock if lock is not None else threading.Lock()
 
     def on_price(self, symbol: str, ltp: float, source: str) -> None:
         with self.lock:

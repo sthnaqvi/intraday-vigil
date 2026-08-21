@@ -1,4 +1,6 @@
 """Loop tests against the scripted mock Kite."""
+import threading
+import time as _time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
@@ -136,26 +138,27 @@ def test_unprotected_position_gets_sl_from_seed(tmp_path):
     assert tp.sl_price == 792.0 and tp.sl_pct == 0.01
 
 
-def test_unprotected_tracked_position_forces_the_fast_cycle_even_when_price_is_far_from_sl(
-        tmp_path):
+def test_unprotected_tracked_position_is_detected_independent_of_price(tmp_path):
     """The 2026-08-18 incident: a resting SL got cancelled outside the daemon while price
     sat well clear of it, so the old any_near check (price-proximity only) never sped the
     daemon up — the naked position was detected at the slow 150s cadence the whole time.
-    Missing protection must force the fast cycle on its own, independent of price."""
-    from vigil import config
-
+    Under the tick-driven architecture there's no variable-speed cycle to force anymore —
+    reconciliation (where SL_LOST is detected) runs on its own fixed, fast, unconditional
+    cadence (config.RECONCILE_INTERVAL_S) regardless of price proximity or protection
+    state, which is the actual fix: detection speed no longer depends on either."""
     kite = MockKite()
     oid = seed_indigo_long(kite)
     loop = make_loop(tmp_path, kite)
     kite.set_quote("INDIGO", 4150.0)
-    loop.cycle()  # first cycle: discovers + tracks the position, SL intact
+    loop.cycle()  # first pass: discovers + tracks the position, SL intact
 
     kite.cancel_order("regular", oid)  # simulate the SL vanishing outside the daemon
     kite.set_quote("INDIGO", 4150.0)   # price unchanged — nowhere near the old SL
-    interval = loop.cycle()
+    loop.cycle()
 
-    assert interval == config.CYCLE_NEAR_SL_S, (
-        "an unprotected position must force the fast cycle even when price never moved"
+    events_file = next((tmp_path / "data").glob("events-*.jsonl"))
+    assert "SL_LOST" in events_file.read_text(), (
+        "an unprotected position must be detected even when price never moved"
     )
 
 
@@ -218,3 +221,151 @@ def test_status_snapshot_contract(tmp_path):
                 "sl_price", "sl_pct", "near_sl"):
         assert key in pos
     assert pos["symbol"] == "INDIGO"
+
+
+# ---------- real-time (tick-driven) decisions ----------
+
+def test_a_tick_alone_fires_a_breakeven_modify_with_no_full_pass_involved(tmp_path):
+    """The actual point of the tick-driven architecture: a price update by itself, with
+    no cycle()/_tick() call at all, must be enough to trigger a decision."""
+    kite = MockKite()
+    oid = seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()  # discover + track the position (Phase 1, SL untouched)
+    assert kite.modify_calls == []
+
+    loop._on_price("INDIGO", 4192.0, "ws")  # +1.01R — no cycle()/_tick() call at all
+
+    assert kite.modify_calls, "a tick alone must fire the breakeven modify"
+    assert kite.modify_calls[-1]["order_id"] == oid
+    assert loop.session.positions["INDIGO"].phase == 2
+
+
+def test_position_decisions_are_serialized_across_concurrent_ticks(tmp_path):
+    """Two near-simultaneous ticks for the same symbol must never run the decision path
+    concurrently — proves the shared lock (the same one TriggerEngine uses) actually
+    serializes them, not just that it exists."""
+    kite = MockKite()
+    seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()  # discover + track
+
+    state = {"inside": 0, "max_concurrent": 0}
+    orig = loop._apply_position_decision
+
+    def spy(tp, ltp):
+        state["inside"] += 1
+        state["max_concurrent"] = max(state["max_concurrent"], state["inside"])
+        _time.sleep(0.05)  # force a real window where an unguarded race would show up
+        orig(tp, ltp)
+        state["inside"] -= 1
+
+    loop._apply_position_decision = spy
+
+    threads = [threading.Thread(target=loop._on_price, args=("INDIGO", 4192.0, "ws"))
+              for _ in range(5)]
+    for t in threads:
+        t.start()
+    for t in threads:
+        t.join()
+
+    assert state["max_concurrent"] == 1, "the lock must fully serialize position decisions"
+    # And the ratchet guard means 5 identical ticks still only produce one real modify.
+    assert len(kite.modify_calls) == 1
+
+
+def test_stale_tick_falls_back_to_a_poll_driven_decision(tmp_path):
+    """If a symbol's tick has gone stale (dropped socket, or nothing pushed a price in a
+    while), the periodic poll fallback must still drive the same decision path — the
+    daemon's SL management can never silently stall just because the socket did."""
+    from vigil import config
+
+    kite = MockKite()
+    oid = seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()  # discover + track
+
+    loop._last_tick_at["INDIGO"] = _time.monotonic() - config.TICK_STALE_AFTER_S - 1
+    kite.set_quote("INDIGO", 4192.0, open_=4140, high=4193, low=4100)  # +1.01R
+    assert kite.modify_calls == []
+
+    loop._poll_prices()
+
+    assert kite.modify_calls, "a stale tick must fall back to a poll-driven decision"
+    assert kite.modify_calls[-1]["order_id"] == oid
+
+
+def test_fresh_ticks_are_left_alone_by_the_poll_fallback_when_a_feed_is_attached(tmp_path):
+    """With a real push feed actually running, a symbol with a recent tick must not also
+    get re-polled every pass — the fallback is scoped to genuinely stale symbols there,
+    not everyone. (Distinct from the no-feed-at-all case below, which polls everything —
+    a feed being attached is what makes "recent tick" a meaningful freshness signal.)"""
+    kite = MockKite()
+    seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()
+    loop.feed = object()  # simulate an attached push feed, without a real WebSocket
+    loop._last_tick_at["INDIGO"] = _time.monotonic()  # just ticked
+
+    polled: list[str] = []
+    orig_quote = kite.quote
+
+    def spy_quote(symbols):
+        polled.extend(symbols)
+        return orig_quote(symbols)
+
+    kite.quote = spy_quote
+
+    loop._poll_prices()
+
+    assert polled == [], "a fresh-tick symbol must not be re-polled once a feed is attached"
+
+
+def test_no_feed_at_all_polls_every_watched_symbol_every_pass(tmp_path):
+    """Paper mode (there's no real WebSocket for a simulated broker) and any live account
+    whose ticker failed to start have no tick source to go "stale" relative to. Without a
+    feed attached, every watched symbol must be polled every pass — not gated on
+    _last_tick_at, which would otherwise let a paper-mode symbol go quiet for up to
+    TICK_STALE_AFTER_S after its first poll."""
+    kite = MockKite()
+    seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()
+    assert loop.feed is None  # no real feed in this test environment
+    loop._last_tick_at["INDIGO"] = _time.monotonic()  # "just ticked" via the poll above
+
+    polled: list[str] = []
+    orig_quote = kite.quote
+
+    def spy_quote(symbols):
+        polled.extend(symbols)
+        return orig_quote(symbols)
+
+    kite.quote = spy_quote
+
+    loop._poll_prices()
+
+    assert polled == ["NSE:INDIGO"], (
+        "with no feed attached, every pass must poll, not just stale ones")
+
+
+def test_reconcile_only_runs_when_due(tmp_path):
+    """Decoupled cadence: a _tick() pass with do_reconcile=False must not discover a new
+    broker-side position — that's reconcile's job, and it only runs on its own schedule
+    now, not on every pass."""
+    kite = MockKite()
+    kite.set_position("SBIN", 200, buy_price=800.0)
+    kite.add_sl_order("SBIN", "SELL", 792.0, 200)
+    kite.set_quote("SBIN", 800.0)
+    loop = make_loop(tmp_path, kite)
+
+    loop._tick(loop.now_fn(), do_reconcile=False, do_qty_verify=False)
+    assert "SBIN" not in loop.session.positions
+
+    loop._tick(loop.now_fn(), do_reconcile=True, do_qty_verify=False)
+    assert "SBIN" in loop.session.positions

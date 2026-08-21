@@ -2,9 +2,11 @@
 
 This is the single source of truth for the SL lifecycle. `vigil`'s daemon
 (`src/vigil/monitor.py`, `src/vigil/rules.py`) executes every rule on this page
-automatically, every cycle, for every open position. The Claude skill applies only the
-entry-time rules (initial SL width, stop-hunt guard before sizing) and never modifies an
-SL order once the daemon owns it — see `skill/intraday-vigil/SKILL.md`'s hard rules.
+automatically for every open position — phase transitions and SL modifications react to
+price the instant a tick arrives, not on a poll (see "Cadence" below). The Claude skill
+applies only the entry-time rules (initial SL width, stop-hunt guard before sizing) and
+never modifies an SL order once the daemon owns it — see `skill/intraday-vigil/SKILL.md`'s
+hard rules.
 
 All the defaults below are configured in `src/vigil/config.py` and `src/vigil/rules.py`.
 They're this project's defaults, not laws of physics — change them for your own risk
@@ -32,7 +34,7 @@ modify actually landed rather than trusting the API response alone.
 ### Phase 3 — Mechanical trail at `2 × sl_pct` (`profit_R ≥ 1.5`)
 
 The stop trails at `trail_pct = TRAIL_MULT × sl_pct` (`TRAIL_MULT = 2.0` by default) behind
-the live price, recalculated every cycle:
+the live price, recalculated on every price tick:
 
 ```
 # long
@@ -102,15 +104,32 @@ reasonable default) — before computing `qty`, on every slot, every time:
 sizing_capital = margin_allocated_to_this_slot - transaction_cost_buffer
 ```
 
-## Order-quantity verification, every cycle
+## Order-quantity verification
 
-The daemon re-reads every tracked position's SL order every cycle and compares its actual
-quantity against the position's actual quantity, independent of any phase transition or
-recent modify. A mismatch is fixed immediately, and the fix is verified by re-reading the
-order afterward — never assumed from the API call not raising an exception. See
-`docs/incidents/verification-gaps.md` for the two separate real incidents (an omitted
-quantity, and an exchange-side rejection the code didn't check for) that made this
-unconditional.
+The daemon re-reads every tracked position's SL order every `QTY_VERIFY_INTERVAL_S` (20s by
+default) and compares its actual quantity against the position's actual quantity,
+independent of any phase transition or recent modify. A mismatch is fixed immediately, and
+the fix is verified by re-reading the order afterward — never assumed from the API call not
+raising an exception. See `docs/incidents/verification-gaps.md` for the two separate real
+incidents (an omitted quantity, and an exchange-side rejection the code didn't check for)
+that made this unconditional.
+
+## Cadence: what's tick-driven vs. periodic
+
+Phase transitions and SL modifications (breakeven, trail) react to price the instant a
+WebSocket tick arrives — not on a fixed poll — via `MonitorLoop._on_price` /
+`_apply_position_decision` (`src/vigil/monitor.py`). If a symbol's ticks go stale (dropped
+socket) or no push feed is running at all (paper mode has no real WebSocket), a periodic
+poll fallback drives the same decision path instead — never a separate, weaker code path.
+
+Everything else that genuinely has no push alternative runs on its own short, independent
+cadence (`src/vigil/config.py`): broker-truth reconciliation (`RECONCILE_INTERVAL_S`, ~20s
+— Kite's WebSocket carries price ticks only, not order/position state), qty verification
+(`QTY_VERIFY_INTERVAL_S`, ~20s), and the run loop's own wake-up (`LOOP_TICK_S`, ~5s) that
+paces time actions (squareoff, alerts, kill switch) and decides when each slower concern
+above is next due. None of these gate SL decisions anymore — that coupling was a holdover
+from this project's very first version, when the *skill itself* polled to save Claude
+tokens; the current daemon never calls Claude, so that constraint doesn't apply to it.
 
 ## Known trade-off: market protection converts SL-M into SL (limit)
 

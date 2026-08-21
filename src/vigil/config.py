@@ -52,10 +52,19 @@ TRAIL_MIN_MOVE = 0.005    # only modify if SL moves > 0.5%
 STOP_HUNT_BUFFER = 0.003  # keep SL 0.3% clear of PDH/PDL/day-H/L
 NSE_TICK = NSE.tick
 
-# Cadence
-CYCLE_NORMAL_S = 150
-CYCLE_NEAR_SL_S = 90
-NEAR_SL_PCT = 0.005       # position "near SL" when LTP within 0.5% of trigger
+# Cadence — four independent concerns, not one shared interval. SL decisions themselves
+# are now tick-driven (see monitor.py's _on_price/_apply_position_decision), not polled at
+# all; the constants below are for the concerns that genuinely have no push alternative.
+LOOP_TICK_S = 5            # the run loop's own wake-up — drives time-action checks and
+                            # decides when each slower concern below is next due
+RECONCILE_INTERVAL_S = 20  # broker-truth poll (new/closed positions, orphaned SLs) — Kite's
+                            # WebSocket carries price ticks only, not order/position state,
+                            # so this has no push alternative without a public postback URL
+QTY_VERIFY_INTERVAL_S = 20  # SL qty-drift verification — order-state, not price-driven
+TICK_STALE_AFTER_S = 30    # no tick for a symbol this long -> the periodic pass below
+                            # becomes its decision fallback, same "poll as a fallback for a
+                            # dropped socket" pattern triggers.py already uses
+NEAR_SL_PCT = 0.005        # position "near SL" when LTP within 0.5% of trigger (display only)
 
 # Risk
 KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries

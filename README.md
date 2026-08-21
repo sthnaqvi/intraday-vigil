@@ -5,9 +5,11 @@
 A deterministic stop-loss-lifecycle daemon for intraday (MIS-style) equity positions,
 paired with a Claude Code skill for the parts that need judgment (sector selection, entry
 timing, post-session review). The daemon owns everything mechanical once a position and
-its stop exist at the broker: breakeven moves, mechanical trailing, quantity verification,
-time-based alerts, and a scheduled square-off — every cycle, deterministically, with every
-action verified against the broker before the daemon believes it happened.
+its stop exist at the broker: breakeven moves and mechanical trailing react to price the
+instant a tick arrives (not on a poll), quantity verification and broker-truth
+reconciliation each run on their own short periodic cadence, and time-based alerts and a
+scheduled square-off fire on the clock — every action verified against the broker before
+the daemon believes it happened.
 
 > ⚠️ **This places real orders with real money when run against a live broker.** Read
 > [`docs/safety.md`](docs/safety.md) before you point it at a funded account. Nothing here
@@ -15,7 +17,7 @@ action verified against the broker before the daemon believes it happened.
 > [paper mode](docs/quickstart.md), with no broker account and no money at risk, and read
 > the [known incidents](docs/incidents/) this project's own hard rules came from.
 
-## What it does, every cycle
+## What it does
 
 1. Reconciles broker truth (positions + orders) against tracked state — new positions are
    auto-discovered, exits are detected via SL order status, including profitable trail
@@ -34,14 +36,14 @@ action verified against the broker before the daemon believes it happened.
    finish *before* the broker's own force-square rule — enforced at construction time, not
    just by convention (`src/vigil/market_profile.py`).
 5. Kill switch: a configurable daily-loss threshold sets a flag that blocks new entries.
-6. Writes a session snapshot and an append-only audit log every cycle, and sends a desktop
-   notification on every transition that matters (a live daemon **refuses to start** with
-   no working notifier, unless you explicitly accept running silent).
+6. Writes a session snapshot and an append-only audit log on every check, and sends a
+   desktop notification on every transition that matters (a live daemon **refuses to
+   start** with no working notifier, unless you explicitly accept running silent).
 
 Safety properties: every SL modify is verified against a broker re-read before state
 advances, never assumed from the API call not raising; a rejected or dead SL order with the
-position still open is re-placed immediately; a cycle crash never kills the process; killing
-the daemon is always safe — resting stops keep protecting you at the exchange.
+position still open is re-placed immediately; a failed check never kills the process;
+killing the daemon is always safe — resting stops keep protecting you at the exchange.
 
 ## Install
 

@@ -54,13 +54,16 @@ automatically.
 A construction-time check only catches a misconfiguration; it says nothing about the daemon
 actually *waking up* in time to act on it. `rules.seconds_until_next_action(now, fired)`
 returns the number of seconds until the next not-yet-fired alert or the square-off itself,
-and `monitor.py`'s `cycle()` clamps its sleep interval to whichever is sooner:
+and `monitor.py`'s `_run_loop()` clamps its sleep interval to whichever is sooner:
 
 ```python
-interval = min(cycle_interval, max(seconds_until_next_action, 1))
+interval = min(config.LOOP_TICK_S, max(seconds_until_next_action, 1))
 ```
 
-Without this, a cycle finishing just before a scheduled action could sleep a flat interval
+SL decisions themselves are tick-driven now, not on this loop at all (see
+`docs/sl-rules.md`) — `LOOP_TICK_S` (5s by default) only paces the concerns that still need
+a periodic check: time actions, broker-truth reconciliation, and qty verification. Even at
+5s, without this clamp a check finishing just before a scheduled action could still sleep
 straight past it — the same failure mode that motivated moving `squareoff_at` earlier in
 the first place (see `docs/incidents/trail-and-sl-lifecycle.md`), just at the run-time
 layer instead of the configuration layer. Both layers are needed: construction-time
