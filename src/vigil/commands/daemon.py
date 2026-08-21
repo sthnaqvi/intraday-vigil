@@ -6,11 +6,42 @@ import signal
 import subprocess
 import sys
 import time
+from datetime import datetime
 
-from .. import auth, config, notify
+from .. import auth, clock, config, notify
 from ..monitor import MonitorLoop
 from ..state import SessionState
 from ._shared import _daemon_pid, _live_broker, _pidfile_is_mine, is_paper_mode, set_paper_mode
+
+
+def _startup_message(mode: str, pid: int, now: datetime, force: bool) -> str:
+    """What the daemon will actually do next, given the real time right now — not a
+    canned line that only happens to be true if you start it before the market opens.
+    A fixed "waits for the 09:15 bell" message printed at noon is exactly backwards: the
+    daemon isn't waiting for anything at that point, it's already managing positions.
+    """
+    header = f"Daemon started ({mode}, pid {pid})."
+    tail = "`vigil status` any time; `vigil stop` to halt."
+    open_s = config.MARKET_OPEN.strftime("%H:%M")
+    squareoff_s = config.SQUAREOFF_AT.strftime("%H:%M")
+    holidays = clock.load_holidays()
+
+    if not clock.is_market_day(now.date(), holidays):
+        forced = " (--force: running on a non-trading day)" if force else ""
+        return f"{header}{forced} Today isn't a trading day. {tail}"
+    if now.time() < config.MARKET_OPEN:
+        open_dt = datetime.combine(now.date(), config.MARKET_OPEN, tzinfo=now.tzinfo)
+        mins = max(0, int((open_dt - now).total_seconds() // 60))
+        return (f"{header} Waiting for the {open_s} bell (about {mins}m). Squares off at "
+                f"{squareoff_s} and exits on its own. {tail}")
+    if now.time() < config.SQUAREOFF_AT:
+        return (f"{header} Market is open — already managing positions live. Squares off "
+                f"at {squareoff_s} and exits on its own. {tail}")
+    if now.time() <= config.MARKET_CLOSE:
+        return (f"{header} Past today's {squareoff_s} squareoff time — any open MIS "
+                f"position gets squared off almost immediately, then it exits. {tail}")
+    forced = " (--force: running after today's close)" if force else ""
+    return f"{header}{forced} Outside today's session hours. {tail}"
 
 
 def cmd_start(args) -> int:
@@ -46,17 +77,23 @@ def cmd_start(args) -> int:
     # I/O, so a refusal exits almost instantly. Without this grace check the user sees
     # "Daemon started" and only discovers the refusal by tailing daemon.out.
     time.sleep(0.5)
-    if proc.poll() is not None and proc.returncode != 0:
+    if proc.poll() is not None:
         tail = "\n".join(daemon_out.read_text().splitlines()[-6:]) if daemon_out.exists() else ""
         config.PID_FILE.unlink(missing_ok=True)
-        print(f"Daemon exited immediately (code {proc.returncode}):\n{tail}", file=sys.stderr)
-        return proc.returncode
+        if proc.returncode != 0:
+            print(f"Daemon exited immediately (code {proc.returncode}):\n{tail}",
+                  file=sys.stderr)
+            return proc.returncode
+        # A CLEAN exit this fast, with no crash, is almost always "market is closed and
+        # --force wasn't passed" (see monitor.py's _run_loop). Printing the generic
+        # "Daemon started... squares off at 15:05" success message here would be false —
+        # there is no daemon anymore by the time that line hits the screen.
+        print(f"Daemon exited immediately (market closed, no --force):\n{tail}",
+              file=sys.stderr)
+        return 0
 
     mode = "DRY RUN" if args.dry_run else ("PAPER" if paper else "LIVE")
-    print(f"Daemon started ({mode}, pid {proc.pid}). It waits for the "
-          f"{config.MARKET_OPEN.strftime('%H:%M')} bell if early,\n"
-          f"squares off at {config.SQUAREOFF_AT.strftime('%H:%M')}, and exits on its own. "
-          f"`vigil status` any time; `vigil stop` to halt.")
+    print(_startup_message(mode, proc.pid, clock.now_ist(), args.force))
     if paper:
         print("\nPaper mode — no real broker, no real money. Next: place a simulated "
               "trade with `vigil enter`, or open the dashboard with `vigil web` to watch "

@@ -5,11 +5,15 @@ can be tested directly without mocking Kite. Assert it stays that way: these tes
 hang or fail on a real auth attempt if the check ever moved after _live_broker().
 """
 import types
+from datetime import datetime, time
+from zoneinfo import ZoneInfo
 
 import pytest
 
 from vigil import notify
 from vigil.commands import _shared, daemon
+
+IST = ZoneInfo("Asia/Kolkata")
 
 
 class _Args(types.SimpleNamespace):
@@ -213,3 +217,86 @@ def test_restart_forwards_flags_to_the_new_daemon(monkeypatch, tmp_path):
     daemon.cmd_restart(
         _Args(dry_run=False, force=False, paste=False, allow_silent=True))
     assert "--allow-silent" in captured["cmd"]
+
+
+# ---------- startup message reflects the real time, not a canned line ----------
+
+MONDAY = datetime(2026, 8, 24, tzinfo=IST)    # a real Monday
+SATURDAY = datetime(2026, 8, 22, tzinfo=IST)  # a real Saturday
+
+
+@pytest.fixture
+def _fixed_market_hours(monkeypatch):
+    from vigil import config
+    monkeypatch.setattr(config, "MARKET_OPEN", time(9, 15))
+    monkeypatch.setattr(config, "SQUAREOFF_AT", time(15, 5))
+    monkeypatch.setattr(config, "MARKET_CLOSE", time(15, 30))
+    monkeypatch.setattr(daemon.clock, "load_holidays", lambda: set())
+
+
+def test_startup_message_before_market_open(_fixed_market_hours):
+    now = MONDAY.replace(hour=8, minute=0)
+    msg = daemon._startup_message("LIVE", 111, now, force=False)
+    assert "Waiting for the 09:15 bell" in msg
+    assert "Squares off at 15:05" in msg
+
+
+def test_startup_message_during_market_hours_does_not_claim_it_is_waiting(_fixed_market_hours):
+    """This is the exact bug report: starting at noon must not say 'waits for 09:15'."""
+    now = MONDAY.replace(hour=12, minute=30)
+    msg = daemon._startup_message("LIVE", 111, now, force=False)
+    assert "Market is open — already managing positions live" in msg
+    assert "Waiting for" not in msg
+    assert "09:15 bell" not in msg
+
+
+def test_startup_message_past_squareoff_before_close(_fixed_market_hours):
+    now = MONDAY.replace(hour=15, minute=10)
+    msg = daemon._startup_message("LIVE", 111, now, force=False)
+    assert "Past today's 15:05 squareoff time" in msg
+
+
+def test_startup_message_after_close(_fixed_market_hours):
+    now = MONDAY.replace(hour=16, minute=0)
+    msg = daemon._startup_message("LIVE", 111, now, force=False)
+    assert "Outside today's session hours" in msg
+    assert "--force" not in msg
+
+
+def test_startup_message_after_close_with_force_says_so(_fixed_market_hours):
+    now = MONDAY.replace(hour=16, minute=0)
+    msg = daemon._startup_message("LIVE", 111, now, force=True)
+    assert "--force" in msg and "after today's close" in msg
+
+
+def test_startup_message_on_a_non_trading_day(_fixed_market_hours):
+    now = SATURDAY.replace(hour=10, minute=0)
+    msg = daemon._startup_message("LIVE", 111, now, force=False)
+    assert "isn't a trading day" in msg
+
+
+def test_start_reports_a_clean_immediate_exit_instead_of_a_false_success(
+        monkeypatch, tmp_path, capsys):
+    """Market closed + no --force makes `monitor` exit 0 almost instantly (see
+    monitor.py's _run_loop). cmd_start's old crash-check only caught a NON-zero exit, so
+    it printed the generic "Daemon started... squares off at 15:05" success line for a
+    process that, by the time that line hit the screen, no longer existed."""
+    _wire_common_daemon_mocks(monkeypatch, tmp_path)
+    monkeypatch.setattr(daemon, "_daemon_pid", lambda: None)
+
+    class ExitedCleanly:
+        pid = 4242
+        returncode = 0
+
+        def poll(self):
+            return 0  # already exited, no crash
+
+    monkeypatch.setattr(daemon.subprocess, "Popen", lambda cmd, **kw: ExitedCleanly())
+
+    code = daemon.cmd_start(
+        _Args(dry_run=False, force=False, paste=False, allow_silent=False))
+    assert code == 0
+    captured = capsys.readouterr()
+    assert "exited immediately" in captured.err
+    assert "market closed" in captured.err.lower()
+    assert "Daemon started" not in captured.out, "must not also print the success line"
