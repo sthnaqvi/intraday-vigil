@@ -30,27 +30,30 @@ def _at(hhmm: str) -> datetime:
     return datetime(2026, 8, 21, h, m, 0, tzinfo=IST)
 
 
-def test_no_block_when_no_positions_open():
+def test_no_block_when_no_positions_open(monkeypatch):
+    monkeypatch.setattr(clock, "now_ist", lambda: _at("1503"))
     SessionState(date="2026-08-21").save()
     assert _squareoff_window_block(_at("1503")) is None
 
 
-def test_blocks_inside_window_with_open_position():
+def test_blocks_inside_window_with_open_position(monkeypatch):
+    # SQUAREOFF_AT is 15:00 by default; 15:02 is inside the 15-minute lead window and
+    # matches almost exactly when both real incidents stopped the daemon.
+    monkeypatch.setattr(clock, "now_ist", lambda: _at("1502"))
     s = SessionState(date="2026-08-21")
     s.positions["KOTAKBANK"] = TrackedPosition(
         symbol="KOTAKBANK", direction="LONG", entry=402.99, qty=3674,
         sl_order_id="O1", sl_price=397.85, sl_pct=0.0128,
     )
     s.save()
-    # SQUAREOFF_AT is 15:05 by default; 15:02 is inside the 15-minute lead window and
-    # matches almost exactly when both real incidents stopped the daemon.
     msg = _squareoff_window_block(_at("1502"))
     assert msg is not None
     assert "KOTAKBANK" in msg
     assert "--i-know" in msg
 
 
-def test_does_not_block_well_before_the_window():
+def test_does_not_block_well_before_the_window(monkeypatch):
+    monkeypatch.setattr(clock, "now_ist", lambda: _at("1200"))
     s = SessionState(date="2026-08-21")
     s.positions["KOTAKBANK"] = TrackedPosition(
         symbol="KOTAKBANK", direction="LONG", entry=402.99, qty=3674,
@@ -60,7 +63,8 @@ def test_does_not_block_well_before_the_window():
     assert _squareoff_window_block(_at("1200")) is None
 
 
-def test_does_not_block_after_broker_squareoff_has_passed():
+def test_does_not_block_after_broker_squareoff_has_passed(monkeypatch):
+    monkeypatch.setattr(clock, "now_ist", lambda: _at("1530"))
     s = SessionState(date="2026-08-21")
     s.positions["KOTAKBANK"] = TrackedPosition(
         symbol="KOTAKBANK", direction="LONG", entry=402.99, qty=3674,
