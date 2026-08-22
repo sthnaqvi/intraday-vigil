@@ -2,9 +2,8 @@
 
 ## 0.1.0 — 2026-08-23
 
-First tagged release, rewritten from a private, single-account daemon into a
-multi-broker-capable package, then carried from a poll-driven prototype to a real-time,
-tick-driven daemon with a live dashboard and an opt-in Claude bridge.
+First tagged release. Carries the `0.1.0.dev0` work below from a poll-driven prototype to
+a real-time, tick-driven daemon with a live dashboard and an opt-in Claude bridge.
 
 ### Added
 - Real-time, tick-driven SL decision engine: breakeven and mechanical trailing now react
@@ -46,6 +45,47 @@ tick-driven daemon with a live dashboard and an opt-in Claude bridge.
   handed to the broker's own forced closure) and been saved by luck once. A rule that only
   survives being remembered mid-session isn't a safety net; see
   `docs/incidents/discipline-and-process.md`.
+
+### Changed
+- `notify()`/`alert_dialog()` now log via `events.logger` unconditionally, before the OS
+  notification backend is even attempted, instead of only falling back to a terminal echo
+  if the backend failed. A successful OS toast used to mean the terminal running `vigil
+  monitor` — the primary way this tool is actually watched — never showed what fired; miss
+  the toast and you got a sound and nothing else. Now every alert is durably visible in
+  both the CLI console and `logs/algo.log` (already a Live Log dock source).
+- A reconciled position already flat at the broker with no `COMPLETE` fill on its own SL
+  order is now labelled by what actually happened — a broker-forced closure gets its own
+  distinct reason — instead of defaulting to `MANUAL_EXIT` even when the daemon wasn't
+  running to see the real cause. Realized P&L was always correct; only `exit_reason` was
+  wrong, and only in this one gap.
+- README, `docs/usage.md`, and `docs/user-guide.md` brought current with everything above
+  — neither the real-time dashboard nor skill automation was mentioned anywhere before this
+  release. README gained a value-proposition section (a DIY-vs-hardened comparison and a
+  named comparison against Zerodha GTT/Streak/Tradetron/AlgoTest/Chartink/DIY Python),
+  placed after Install/Daily use rather than before them. `CONTRIBUTING.md`'s setup steps
+  now cover installing the skill and exercising a change in paper mode, not just running
+  the test suite.
+
+### Fixed
+- `GuardedBroker`'s dry-run path crashed on the very first `--dry-run` mutation
+  (`emit() got multiple values for argument 'symbol'`) — the one path meant to make
+  trial-and-error safe.
+- The Claude skill wasn't actually reachable from a plain `pip install intraday-vigil` —
+  `skill/` sits beside `src/`, not inside the packaged `vigil` module, so the wheel never
+  included it and `vigil skill-install` had nothing to link without a full repo clone.
+  Fixed by bundling the skill into the wheel itself (see "Added" above); verified against
+  a real built wheel installed into a throwaway venv with no repo anywhere nearby.
+- `TICKER_RESUBSCRIBED` was firing on every failed reconnect attempt, not just successful
+  ones, and would have retried far more often than intended against a persistent failure
+  once the run loop's own heartbeat sped up — now backed off and only announced on real
+  success.
+
+## 0.1.0.dev0 — unreleased
+
+First open-source release, rewritten from a private, single-account daemon into a
+multi-broker-capable package.
+
+### Added
 - `BrokerClient` port (`src/vigil/ports.py`) with a `GuardedBroker` safety wrapper
   (dry-run, call spacing, retry, audit) usable with any adapter.
 - `PaperAdapter` — a real in-process simulated broker with its own order book, plus a
@@ -79,24 +119,6 @@ tick-driven daemon with a live dashboard and an opt-in Claude bridge.
 - Default `squareoff_at` preponed from 15:05 to 15:00 (`MarketProfile`'s `NSE` instance) —
   derived alerts shift 5 minutes earlier with it. Data-driven, not a guess:
   `docs/research/squareoff-timing.md`.
-- `notify()`/`alert_dialog()` now log via `events.logger` unconditionally, before the OS
-  notification backend is even attempted, instead of only falling back to a terminal echo
-  if the backend failed. A successful OS toast used to mean the terminal running `vigil
-  monitor` — the primary way this tool is actually watched — never showed what fired; miss
-  the toast and you got a sound and nothing else. Now every alert is durably visible in
-  both the CLI console and `logs/algo.log` (already a Live Log dock source).
-- A reconciled position already flat at the broker with no `COMPLETE` fill on its own SL
-  order is now labelled by what actually happened — a broker-forced closure gets its own
-  distinct reason — instead of defaulting to `MANUAL_EXIT` even when the daemon wasn't
-  running to see the real cause. Realized P&L was always correct; only `exit_reason` was
-  wrong, and only in this one gap.
-- README, `docs/usage.md`, and `docs/user-guide.md` brought current with everything above
-  — neither the real-time dashboard nor skill automation was mentioned anywhere before this
-  release. README gained a value-proposition section (a DIY-vs-hardened comparison and a
-  named comparison against Zerodha GTT/Streak/Tradetron/AlgoTest/Chartink/DIY Python),
-  placed after Install/Daily use rather than before them. `CONTRIBUTING.md`'s setup steps
-  now cover installing the skill and exercising a change in paper mode, not just running
-  the test suite.
 
 ### Fixed
 - The base package (no `[kite]` extra) crashed on import because `auth.py` imported
@@ -107,15 +129,3 @@ tick-driven daemon with a live dashboard and an opt-in Claude bridge.
   was recorded as successful without re-reading the order to confirm it, and a cancelled
   stop that went undetected because reconciliation only checked newly-discovered
   positions.
-- `GuardedBroker`'s dry-run path crashed on the very first `--dry-run` mutation
-  (`emit() got multiple values for argument 'symbol'`) — the one path meant to make
-  trial-and-error safe.
-- The Claude skill wasn't actually reachable from a plain `pip install intraday-vigil` —
-  `skill/` sits beside `src/`, not inside the packaged `vigil` module, so the wheel never
-  included it and `vigil skill-install` had nothing to link without a full repo clone.
-  Fixed by bundling the skill into the wheel itself (see "Added" above); verified against
-  a real built wheel installed into a throwaway venv with no repo anywhere nearby.
-- `TICKER_RESUBSCRIBED` was firing on every failed reconnect attempt, not just successful
-  ones, and would have retried far more often than intended against a persistent failure
-  once the run loop's own heartbeat sped up — now backed off and only announced on real
-  success.
