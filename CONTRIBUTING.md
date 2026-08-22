@@ -3,13 +3,42 @@
 ## Setup
 
 ```bash
+git clone https://github.com/sthnaqvi/intraday-vigil && cd intraday-vigil
 pip install -e ".[kite,dev,lint]"
 ```
+
+The editable install (`-e`) is what makes this a *development* setup rather than a user
+install: `vigil` now runs straight out of this checkout's `src/`, so an edit takes effect
+on the next invocation — no reinstall, no rebuild, nothing to re-link.
+
+**The skill too, same principle.** `vigil skill-install` resolves the skill from this
+checkout's `skill/intraday-vigil/` (not the copy bundled into a real PyPI wheel — see
+`commands/skill.py`'s `_skill_source()` for the exact resolution order):
+
+```bash
+vigil skill-install
+```
+
+Since that's a symlink into the checkout, editing `skill/intraday-vigil/SKILL.md` or any
+`references/*.md` file is picked up the next time a Claude session starts — no re-run of
+`skill-install` needed either, unless the symlink itself doesn't exist yet.
+
+**Exercising a change end to end**, not just through the test suite: paper mode needs no
+broker account and no real money —
+
+```bash
+vigil start --paper --force
+vigil web              # in a second terminal, or a browser tab — SSE-pushed dashboard
+vigil paper-price DEMO 100.00   # a paper session has no real feed; you move the price
+```
+
+See [`docs/quickstart.md`](docs/quickstart.md) for the full paper-mode walkthrough (placing
+a trade, watching the phase-2/phase-3 SL lifecycle actually fire, squaring off).
 
 ## Before you send a change
 
 ```bash
-pytest tests/ -q                                    # 160+ tests, must stay green
+pytest tests/ -q                                    # 230+ tests, must stay green
 ruff check src/ tests/                                # lint
 mypy src/vigil/models.py src/vigil/ports.py src/vigil/rules.py \
      src/vigil/market_profile.py src/vigil/state.py    # mypy strict, core modules only

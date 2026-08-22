@@ -12,11 +12,30 @@ from .. import config
 SKILL_NAME = "intraday-vigil"
 
 
+def _package_root() -> Path:
+    """The installed `vigil` package's own directory — `.../site-packages/vigil` for a
+    real install, `.../src/vigil` for a source checkout. Split out from _skill_source()
+    so tests can point it at a fake tree without touching the real filesystem next to
+    this module."""
+    return Path(__file__).resolve().parent.parent
+
+
 def _skill_source() -> Path | None:
-    """Where the skill's files actually live. Only resolvable from a source checkout
-    today — `skill/` sits next to `src/`, not inside it, so it isn't bundled into the
-    wheel (see pyproject.toml's `packages = ["src/vigil"]`). Returns None if this
-    install has no skill/ directory to link to."""
+    """Where the skill's files actually live. Checked in order:
+
+    1. Bundled into the installed package itself, at `vigil/_skill/intraday-vigil` —
+       present for any `pip install`, wheel or sdist, per pyproject.toml's
+       `force-include` mapping. This is what makes `pip install intraday-vigil[kite]`
+       followed by `vigil skill-install` work with no repo clone at all.
+    2. Next to a source checkout's own `src/` — `skill/` sits beside `src/`, not inside
+       it (see pyproject.toml's `packages = ["src/vigil"]`), so an editable install or a
+       plain `python -m vigil` run from a clone resolves it here instead.
+
+    Returns None only if neither exists — a build that predates bundling, or a broken
+    checkout."""
+    bundled = _package_root() / "_skill" / SKILL_NAME
+    if (bundled / "SKILL.md").is_file():
+        return bundled
     candidate = config.PROJECT_ROOT / "skill" / SKILL_NAME
     return candidate if (candidate / "SKILL.md").is_file() else None
 
@@ -25,9 +44,11 @@ def cmd_skill_install(args) -> int:
     source = _skill_source()
     if source is None:
         print(
-            "Can't find the skill's source files next to this install — that's expected "
-            "for a plain `pip install intraday-vigil` today, since skill/ isn't bundled "
-            "into the package yet. Clone the repo and run this from inside it instead:\n"
+            "Can't find the skill's source files — neither bundled with this install nor "
+            "in a source checkout next to it. A plain `pip install intraday-vigil` should "
+            "have brought the skill along; if this is a build from before that was true, "
+            "or the install is otherwise broken, clone the repo and run this from inside "
+            "it instead:\n"
             "  git clone https://github.com/sthnaqvi/intraday-vigil\n"
             "  cd intraday-vigil && vigil skill-install",
             file=sys.stderr,

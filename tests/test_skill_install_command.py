@@ -7,6 +7,7 @@ from pathlib import Path
 import pytest
 
 from vigil import config
+from vigil.commands import skill as skill_mod
 from vigil.commands.skill import SKILL_NAME, cmd_skill_install
 
 
@@ -92,11 +93,41 @@ def test_refuses_to_touch_a_real_directory_even_with_force(_fake_checkout_and_ho
 
 
 def test_missing_skill_source_fails_with_a_clear_message(tmp_path, monkeypatch, capsys):
-    # A PROJECT_ROOT with no skill/ dir at all — the "plain pip install" case.
+    # A package root AND a PROJECT_ROOT with no skill dir at all — the "build predates
+    # bundling, and it's not a source checkout either" case.
     empty_root = tmp_path / "site-packages-style-install"
     empty_root.mkdir()
     monkeypatch.setattr(config, "PROJECT_ROOT", empty_root)
+    monkeypatch.setattr(skill_mod, "_package_root", lambda: empty_root)
 
     rc = cmd_skill_install(_args())
     assert rc == 1
     assert "pip install" in capsys.readouterr().err
+
+
+def test_finds_the_skill_bundled_into_a_real_pip_install(
+    _fake_checkout_and_home, tmp_path, monkeypatch, capsys
+):
+    """The actual point of bundling: `pip install intraday-vigil[kite]` alone — no repo
+    clone, no source checkout anywhere on disk — must be enough for `vigil skill-install`
+    to find something to link. PROJECT_ROOT points at an empty dir here (overriding the
+    fixture's own fake checkout), proving resolution came from the bundled path, not a
+    checkout fallback."""
+    ctx = _fake_checkout_and_home
+    site_packages_vigil = tmp_path / "site-packages" / "vigil"
+    bundled_skill = site_packages_vigil / "_skill" / SKILL_NAME
+    bundled_skill.mkdir(parents=True)
+    (bundled_skill / "SKILL.md").write_text("---\nname: intraday-vigil\n---\n")
+
+    no_checkout_here = tmp_path / "nothing-here"
+    no_checkout_here.mkdir()
+    monkeypatch.setattr(config, "PROJECT_ROOT", no_checkout_here)
+    monkeypatch.setattr(skill_mod, "_package_root", lambda: site_packages_vigil)
+
+    rc = cmd_skill_install(_args())
+    assert rc == 0
+
+    target = ctx.home / ".claude" / "skills" / SKILL_NAME
+    assert target.is_symlink()
+    assert target.resolve() == bundled_skill.resolve()
+    assert "Installed:" in capsys.readouterr().out

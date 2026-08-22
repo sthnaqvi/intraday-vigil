@@ -53,6 +53,14 @@ vigil = "vigil.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/vigil"]
 
+# The Claude skill (skill/intraday-vigil/) sits at the repo root, beside src/, not inside
+# the vigil package — force-include copies it into the built wheel anyway, at
+# vigil/_skill/intraday-vigil, so `pip install intraday-vigil` alone is enough for
+# `vigil skill-install` to find something to link, no repo clone required. See
+# commands/skill.py's _skill_source() for the matching read-side path.
+[tool.hatch.build.targets.wheel.force-include]
+"skill/intraday-vigil" = "vigil/_skill/intraday-vigil"
+
 [tool.ruff]
 line-length = 100
 target-version = "py311"

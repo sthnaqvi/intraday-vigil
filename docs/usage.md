@@ -90,9 +90,28 @@ open (or soon-to-be-open) position, whether or not that symbol also has an entry
 |---|---|
 | `vigil web [--port 8765]` | Local dashboard — **can place orders** behind typed confirmation; binds to `127.0.0.1` only, always |
 | `vigil ask [question] [--pending] [--answer ID --text ...]` | Ask Claude (runs the CLI if present, else queues) |
-| `vigil skill-install [--force]` | Symlink `skill/intraday-vigil/` into `~/.claude/skills/` — verifies the result, refuses to clobber an unrelated symlink or a real directory without `--force` (never touches a real directory even then). Source-checkout only; see the README for a plain-PyPI install. |
+| `vigil skill-install [--force]` | Symlink the Claude skill into `~/.claude/skills/` — bundled with the package itself, so this works after a plain `pip install`, no repo clone needed. Verifies the result, refuses to clobber an unrelated symlink or a real directory without `--force` (never touches a real directory even then). |
 
 See `docs/safety.md` for exactly what the dashboard's confirmation flow guarantees.
+
+**Skill automation** (`AUTO_ENQUEUE_ENABLED`, `AUTO_MONITOR_INTERVAL_S` in `config.py`): the
+daemon can queue a Claude request itself, through the same `claudelink.enqueue()` path
+`vigil ask` uses, without you asking. `AUTO_ENQUEUE_ENABLED` (default `True`) is the master
+switch for all of the below; `AUTO_MONITOR_INTERVAL_S` (default `0`, off) additionally
+gates a periodic MONITOR check on a timer, independent of the events below.
+
+| Trigger | Mode queued | Why |
+|---|---|---|
+| A tracked position's SL vanishes and stays naked (`AUTO_REPROTECT` off, or the re-protect attempt itself fails) | `monitor` | Immediate protection question, not a bigger-picture one |
+| An approaching time-alert cutoff (`alert_1400`/`alert_1430`/`alert_1445`) | `monitor` | Same — a procedural check, not a move |
+| A position reaches phase 3 (trailing) | `reassess` | A real move — worth re-checking sector rank and thesis, not just protection status |
+| The kill switch trips | `reassess` | The day itself is the "bigger move" — re-check every open position |
+| Timer, if `AUTO_MONITOR_INTERVAL_S` > 0 | `monitor` | The one trigger with an ongoing token cost even when nothing happened — off by default |
+
+Every queued request runs on its own background thread (`enqueue()`'s subprocess can take
+up to 180s — never on the daemon's own loop) and lands in the same queue `vigil ask
+--pending` reads. REASSESS can only ever propose a new entry; it can't place or modify
+anything unattended either way.
 
 ## The state contract
 

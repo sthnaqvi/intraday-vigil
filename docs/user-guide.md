@@ -29,11 +29,18 @@ their stop-losses. If you run `vigil start` and then nothing happens, that's *co
 there's nothing for it to do yet. It's waiting for a position, the same way a smoke alarm
 is "not broken" just because it hasn't gone off — it's waiting for smoke.
 
-**Scanning stocks and deciding what to trade is the skill's job, and the skill only runs
-when you're talking to Claude.** There is no button, no CLI command, and no dashboard
-click that starts that process — you have to open a conversation with Claude (Claude Code,
-Claude Desktop, or claude.ai — anywhere the skill is installed) and ask for it, in words,
-the same way you're reading this guide right now.
+**Scanning stocks and deciding what to trade is the skill's job, and normally the skill
+only runs when you're talking to Claude.** There is no button, no CLI command, and no
+dashboard click that starts that process — you have to open a conversation with Claude
+(Claude Code, Claude Desktop, or claude.ai — anywhere the skill is installed) and ask for
+it, in words, the same way you're reading this guide right now.
+
+The one exception: with skill automation opted into (`AUTO_ENQUEUE_ENABLED` in
+`config.py` — see `docs/usage.md`'s "Dashboard and the Claude bridge"), the daemon itself
+can queue a `monitor` or `reassess` request when something noteworthy happens, without you
+asking. It still can't place or modify anything unattended either way — REASSESS only ever
+*proposes* a new entry, the same "propose, then wait for your yes" rule that applies to
+every other trade decision in this system.
 
 ## One-time setup — both halves
 
@@ -52,25 +59,25 @@ vigil --help
 ### 2. Install the skill
 
 The skill is a *separate* install, in a *separate* location, read by Claude — not by
-`vigil`. From the repo root:
+`vigil`. It ships bundled with the `vigil` package itself (`pyproject.toml`'s
+`force-include` puts it at `vigil/_skill/intraday-vigil` inside the wheel), so no repo
+clone is needed even for a plain `pip install intraday-vigil[kite]`:
 
 ```bash
-ln -s "$(pwd)/skill/intraday-vigil" ~/.claude/skills/intraday-vigil
+vigil skill-install
 ```
 
-**Verify it actually took.** This step silently does nothing useful if you already have
-an *old* copy sitting at that path (a plain directory, not a symlink) — `ln -s` will
-refuse to overwrite it and you'll still be running stale instructions with no error message
-telling you so. Check:
+This symlinks the bundled skill into `~/.claude/skills/`, then re-reads the link it just
+created and confirms it actually resolves before printing success — never assumed just
+because the symlink call didn't raise, the same discipline the daemon applies to a broker
+write. It refuses to silently clobber an *old* copy already sitting at that path: an
+unrelated symlink needs `vigil skill-install --force` to repoint, and a real directory (not
+a symlink) is never touched automatically — move it aside yourself first
+(`mv ~/.claude/skills/intraday-vigil ~/.claude/skills/intraday-vigil.bak`) and re-run.
 
-```bash
-readlink ~/.claude/skills/intraday-vigil
-```
-
-That must print this repo's `skill/intraday-vigil` path. If it prints nothing, the
-target isn't a symlink — move the existing directory aside first
-(`mv ~/.claude/skills/intraday-vigil ~/.claude/skills/intraday-vigil.bak`) and re-run
-the `ln -s` above.
+Running from a source checkout instead (editing the skill itself, say)? It resolves
+`skill/intraday-vigil/` next to `src/` there instead of the bundled copy — same command,
+no flag needed either way.
 
 ### 3. Confirm Claude can see it
 
