@@ -280,6 +280,24 @@ def run_command(cmd: str, params: dict, confirm: str | None) -> dict:
 
 
 
+def _fmt_event_data(data: dict) -> str:
+    """`key=value key2=value2`, not raw `json.dumps` — braces/quotes/full-precision floats
+    read fine in a wide terminal table but wrap into 6-8 unreadable lines once squeezed
+    into the dashboard's narrower event columns. Floats rounded for the same reason: a
+    17-significant-digit float (e.g. an unrounded division result) does nothing for
+    readability and just adds line-wraps."""
+    parts = []
+    for k, val in data.items():
+        if isinstance(val, float):
+            val = round(val, 2)
+        parts.append(f"{k}={val}")
+    s = " ".join(parts)
+    # Generous, not tight: the dashboard clips display to one line with its own ellipsis
+    # and puts this full string in a hover title, so this cap only needs to guard against
+    # a pathological one-line event, not double as the display truncation.
+    return s if len(s) <= 300 else s[:299] + "…"
+
+
 def _snapshot() -> dict:
     snap, age, fresh = {}, None, False
     if config.STATUS_FILE.exists():
@@ -299,6 +317,8 @@ def _snapshot() -> dict:
         except Exception:
             pid = None
 
+    daemon_snap = snap.get("daemon", {})
+
     events = []
     ev_path = config.DATA_DIR / f"events-{clock.now_ist().date().isoformat()}.jsonl"
     if ev_path.exists():
@@ -309,13 +329,20 @@ def _snapshot() -> dict:
                 continue
             events.append({"ts": r["ts"][11:19], "type": r["type"],
                            "symbol": r.get("symbol") or "",
-                           "data": json.dumps(r.get("data", {}))[:160]})
+                           "data": _fmt_event_data(r.get("data", {}))})
 
     return {
         "daemon": {"running": pid is not None, "pid": pid, "fresh": bool(fresh),
                    "age_s": int(age) if age is not None else None,
-                   "mode": snap.get("daemon", {}).get("mode", "?"),
-                   "broker": snap.get("daemon", {}).get("broker", "kite")},
+                   "mode": daemon_snap.get("mode", "?"),
+                   "broker": daemon_snap.get("broker", "kite"),
+                   "cycles_run": daemon_snap.get("cycles_run")},
+        # Real config constants, not guessed — the Daemon pane shows the actual cadence
+        # each concern runs on (see docs/sl-rules.md's "Cadence" section for why they
+        # differ: SL decisions are tick-driven, these are the periodic-fallback intervals).
+        "cadence": {"loop_s": config.LOOP_TICK_S,
+                    "reconcile_s": config.RECONCILE_INTERVAL_S,
+                    "qty_verify_s": config.QTY_VERIFY_INTERVAL_S},
         "positions": snap.get("positions", []),
         "closed_today": snap.get("closed_today", []),
         "kill_switch": snap.get("kill_switch", False),

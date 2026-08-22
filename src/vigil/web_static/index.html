@@ -2,164 +2,244 @@
 <meta charset="utf-8">
 <title>vigil</title>
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Manrope:wght@500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="app.css">
 <div id="jserr"></div>
 <header>
-  <h1>vigil <span class="dim" id="ver"></span></h1>
-  <div id="acct" class="dim">…</div>
-  <div id="daemon" class="dim">loading…</div>
+  <div class="brand"><span class="mark"></span>VIGIL <span class="ver" id="ver"></span></div>
+  <div class="who" id="acctWho">…</div>
+  <div class="divider"></div>
+  <div class="who" id="acctFunds"></div>
+  <div class="strip-right">
+    <span class="pill" id="daemonPill">loading…</span>
+    <span class="pill" id="marketPill"></span>
+    <span class="clocktxt" id="clock"></span>
+    <button class="pill alert" id="alertPill" style="display:none"></button>
+  </div>
 </header>
 
 <div id="shell">
   <nav>
     <div class="grp">Session</div>
-    <a data-pane="overview" class="on">Overview</a>
-    <a data-pane="positions">Positions <span id="nb_pos" class="badge" style="display:none"></span></a>
-    <a data-pane="events">Events</a>
-    <div class="grp">Act</div>
-    <a data-pane="daemon">Daemon</a>
-    <a data-pane="trade">Trade</a>
-    <a data-pane="triggers">Triggers</a>
-    <div class="grp">Inspect</div>
-    <a data-pane="account">Account</a>
-    <a data-pane="logs">Raw logs</a>
-    <a data-pane="claude">Claude</a>
+    <a data-pane="overview" class="on"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="3" width="7.5" height="7.5" rx="1.6"/><rect x="3" y="13.5" width="7.5" height="7.5" rx="1.6"/><rect x="13.5" y="13.5" width="7.5" height="7.5" rx="1.6"/></svg></span>Overview<span id="nb_pos" class="badge" style="display:none"></span></a>
+    <a data-pane="trade"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="3,17 9.5,10.5 13.5,14.5 21,6"/><polyline points="14.5,6 21,6 21,12.5"/></svg></span>Trade</a>
+    <a data-pane="events"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="2,13 7,13 9.5,6 13.5,19 16,13 22,13"/></svg></span>Events</a>
+    <div class="grp">Operate</div>
+    <a data-pane="daemon"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="6.5" rx="1.8"/><rect x="3" y="13.5" width="18" height="6.5" rx="1.8"/><circle cx="7.2" cy="7.25" r="1" fill="currentColor" stroke="none"/><circle cx="7.2" cy="16.75" r="1" fill="currentColor" stroke="none"/></svg></span>Daemon</a>
+    <a data-pane="account"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4.5 21c0-4.4 3.4-7.5 7.5-7.5s7.5 3.1 7.5 7.5"/></svg></span>Account</a>
+    <a data-pane="logs"><span class="ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M6 2.5h8.5L19 7v14.5H6z"/><path d="M14.5 2.5V7H19"/><line x1="9" y1="13" x2="16" y2="13"/><line x1="9" y1="17" x2="16" y2="17"/></svg></span>Logs</a>
+    <a data-pane="claude"><span class="ic"><svg viewBox="0 0 24 24" fill="currentColor" stroke="none"><path d="M12 2.5l1.9 5.6 5.6 1.9-5.6 1.9L12 17.5l-1.9-5.6L4.5 10l5.6-1.9z"/></svg></span>Claude</a>
   </nav>
 
-  <div id="content">
+  <main id="content">
     <div id="alerts"></div>
 
     <div class="pane on" id="p_overview">
-      <div class="panel"><h2>Positions <span class="dim" id="pos_age"></span></h2><div class="body" id="pos">—</div></div>
-      <div class="panel"><h2>Armed triggers</h2><div class="body" id="trig">—</div></div>
-      <div class="panel"><h2>Recent events</h2><div class="body" id="events_s">—</div></div>
-    </div>
+      <p class="eyebrow">Session cockpit</p>
+      <h1 class="title">Overview</h1>
 
-    <div class="pane" id="p_positions">
-      <div class="panel"><h2>Open &amp; closed <span class="dim" id="pos2_age"></span></h2><div class="body" id="pos2">—</div></div>
-      <div class="panel"><h2>Manage</h2><div class="body">
-        <fieldset><legend>Scale, protect or exit one symbol</legend>
-          <div class="row">
-            <input class="sym" id="m_sym" placeholder="SYMBOL">
-            <label>add qty</label><input id="m_qty" type="number" placeholder="600">
-            <label>sl%</label><input id="m_sl" type="number" step="0.01">
-            <label>trigger</label><input id="m_trig" type="number" step="0.05">
-          </div>
-          <div class="row">
-            <input class="confirm" id="m_ok" placeholder="type SYMBOL">
-            <button onclick="run('add',{symbol:v('m_sym'),qty:v('m_qty')},v('m_ok'))">add (scale in)</button>
-            <button onclick="run('protect',{symbol:v('m_sym'),sl_pct:v('m_sl'),trigger:v('m_trig')},v('m_ok'))">protect</button>
-            <button class="danger" onclick="run('exit',{symbol:v('m_sym')},v('m_ok'))">exit symbol</button>
-          </div>
-        </fieldset>
-        <fieldset><legend>Square off everything</legend><div class="row">
-          <input class="confirm" id="so_ok" placeholder="type SQUAREOFF">
-          <button class="danger" onclick="run('squareoff',{},v('so_ok'))">square off all</button>
-        </div></fieldset>
-      </div></div>
-    </div>
-
-    <div class="pane" id="p_events">
-      <div class="panel"><h2>Today's events</h2><div class="body" id="events_full">—</div></div>
-    </div>
-
-    <div class="pane" id="p_daemon">
-      <div class="panel"><h2>Daemon</h2><div class="body">
-        <div class="row">
-          <button onclick="run('start')">start</button>
-          <button onclick="run('stop')">stop</button>
-          <button onclick="run('status')">status</button>
-          <button onclick="run('positions')">positions</button>
-          <button onclick="run('triggers')">triggers</button>
+      <div class="hero-row">
+        <div class="hero">
+          <div class="label">Day P&amp;L</div>
+          <div class="value" id="heroPnl">—</div>
+          <div class="sub" id="heroR">—</div>
         </div>
-        <fieldset><legend>Quote</legend><div class="row">
-          <input class="sym" id="q_syms" placeholder="HCLTECH INFY" style="width:220px">
-          <button onclick="run('quote',{symbols:v('q_syms')})">quote</button>
-          <span class="hint">space-separated; works without the MCP session</span>
-        </div></fieldset>
-        <fieldset><legend>Seed sl_pct / PDH / PDL (no order)</legend><div class="row">
-          <input class="sym" id="s_sym" placeholder="SYMBOL">
-          <label>sl%</label><input id="s_sl" type="number" step="0.01">
-          <label>pdh</label><input id="s_pdh" type="number" step="0.05">
-          <label>pdl</label><input id="s_pdl" type="number" step="0.05">
-          <button onclick="run('add-position',{symbol:v('s_sym'),sl_pct:v('s_sl'),pdh:v('s_pdh'),pdl:v('s_pdl')})">save seed</button>
-        </div></fieldset>
-      </div></div>
+        <div class="hero">
+          <div class="label">Available</div>
+          <div class="value" id="heroAvail">—</div>
+          <div class="sub" id="heroUsed">—</div>
+        </div>
+        <div class="hero protection">
+          <div class="label">Protection</div>
+          <div class="value"><span class="ring" id="protRing"></span><span id="heroProt">—</span></div>
+          <div class="sub" id="heroProtSub">—</div>
+        </div>
+      </div>
+
+      <div class="ov-grid">
+        <div class="ov-side">
+          <section>
+            <div class="sec-head"><h2>Recent events</h2><a class="more" onclick="document.querySelector('nav a[data-pane=events]').click()">Full log →</a></div>
+            <div class="panel"><div class="scroll-cap" id="events_s">—</div></div>
+          </section>
+        </div>
+        <div class="ov-main" id="ovMain">
+          <section>
+            <div class="sec-head">
+              <h2>Positions</h2><span class="count" id="pos_count"></span>
+              <span class="live-tag" id="pos_age"></span>
+            </div>
+            <div class="panel"><div class="scroll-cap" id="pos">—</div></div>
+          </section>
+          <section>
+            <div class="sec-head"><h2>Armed triggers</h2><span class="count" id="trig_count"></span></div>
+            <div class="panel"><div class="scroll-cap" id="trig">—</div></div>
+          </section>
+        </div>
+      </div>
     </div>
 
     <div class="pane" id="p_trade">
-      <div class="panel"><h2>Enter a position</h2><div class="body">
-        <div class="row">
-          <input class="sym" id="e_sym" placeholder="SYMBOL">
-          <select id="e_side"><option value="long">long</option><option value="short">short</option></select>
-          <label>qty</label><input id="e_qty" type="number" placeholder="590">
-          <label>sl%</label><input id="e_sl" type="number" step="0.01" placeholder="0.91">
-          <label>pdh</label><input id="e_pdh" type="number" step="0.05">
-          <label>pdl</label><input id="e_pdl" type="number" step="0.05">
+      <p class="eyebrow">Place and manage</p>
+      <h1 class="title">Trade</h1>
+
+      <fieldset><legend>Enter a position</legend>
+        <div class="field-row">
+          <div class="field"><label>Symbol</label><input class="sym" id="e_sym" placeholder="SYMBOL"></div>
+          <div class="field"><label>Side</label><select id="e_side"><option value="long">long</option><option value="short">short</option></select></div>
+          <div class="field"><label>Qty</label><input id="e_qty" type="number" placeholder="590"></div>
+          <div class="field"><label>SL %</label><input id="e_sl" type="number" step="0.01" placeholder="0.91"></div>
+          <div class="field"><label>PDH</label><input id="e_pdh" type="number" step="0.05"></div>
+          <div class="field"><label>PDL</label><input id="e_pdl" type="number" step="0.05"></div>
         </div>
-        <div class="row">
-          <input class="confirm" id="e_ok" placeholder="type SYMBOL">
-          <button class="go" onclick="run('enter',{symbol:v('e_sym'),side:v('e_side'),qty:v('e_qty'),sl_pct:v('e_sl'),pdh:v('e_pdh'),pdl:v('e_pdl')},v('e_ok'))">enter</button>
-          <span class="hint">market order + guarded SL · refuses sl% &gt; 1.5 · obeys the 14:30 gate</span>
+        <div class="field-row">
+          <div class="field"><label>Type to confirm</label><input class="sym confirm" id="e_ok" placeholder="SYMBOL"></div>
+          <button class="btn primary" onclick="run('enter',{symbol:v('e_sym'),side:v('e_side'),qty:v('e_qty'),sl_pct:v('e_sl'),pdh:v('e_pdh'),pdl:v('e_pdl')},v('e_ok'))">Enter position</button>
         </div>
-      </div></div>
+        <p class="hint">Market order + guarded SL · refuses sl% &gt; 1.5 · obeys the 14:30 gate.</p>
+      </fieldset>
+
+      <fieldset><legend>Arm a level (watched over the tick feed)</legend>
+        <div class="field-row tight">
+          <div class="field"><label>Symbol</label><input class="sym" id="a_sym" placeholder="SYMBOL"></div>
+          <div class="field"><label>Side</label><select id="a_side"><option value="long">long</option><option value="short">short</option></select></div>
+          <div class="field"><label>Above</label><input id="a_above" type="number" step="0.05"></div>
+          <div class="field"><label>Below</label><input id="a_below" type="number" step="0.05"></div>
+          <div class="field"><label>Qty</label><input id="a_qty" type="number"></div>
+          <div class="field"><label>SL %</label><input id="a_sl" type="number" step="0.01"></div>
+          <div class="field"><label class="chk"><input type="checkbox" id="a_auto"> Auto-execute</label></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Type to confirm</label><input class="sym confirm" id="a_ok" placeholder="SYMBOL"></div>
+          <button class="btn" onclick="run('arm',{symbol:v('a_sym'),side:v('a_side'),above:v('a_above'),below:v('a_below'),qty:v('a_qty'),sl_pct:v('a_sl'),auto:c('a_auto')},v('a_ok'))">Arm</button>
+          <button class="btn" onclick="run('disarm',{symbol:v('a_sym')})">Disarm</button>
+        </div>
+        <p class="hint">Without auto-execute it only alerts.</p>
+      </fieldset>
+
+      <fieldset><legend>Manage an open position</legend>
+        <div class="field-row tight">
+          <div class="field"><label>Symbol</label><input class="sym" id="m_sym" placeholder="SYMBOL"></div>
+          <div class="field"><label>Add qty</label><input id="m_qty" type="number" placeholder="500"></div>
+          <div class="field"><label>SL %</label><input id="m_sl" type="number" step="0.01"></div>
+          <div class="field"><label>Trigger</label><input id="m_trig" type="number" step="0.05"></div>
+        </div>
+        <div class="field-row">
+          <div class="field"><label>Type to confirm</label><input class="sym confirm" id="m_ok" placeholder="SYMBOL"></div>
+          <button class="btn" onclick="run('add',{symbol:v('m_sym'),qty:v('m_qty')},v('m_ok'))">Scale in</button>
+          <button class="btn" onclick="run('protect',{symbol:v('m_sym'),sl_pct:v('m_sl'),trigger:v('m_trig')},v('m_ok'))">Re-protect</button>
+          <button class="btn danger" onclick="run('exit',{symbol:v('m_sym')},v('m_ok'))">Exit</button>
+        </div>
+      </fieldset>
+
+      <fieldset><legend>Square off everything</legend>
+        <div class="field-row">
+          <div class="field"><label>Type to confirm</label><input class="confirm" id="so_ok" placeholder="SQUAREOFF"></div>
+          <button class="btn danger" onclick="run('squareoff',{},v('so_ok'))">Square off all</button>
+        </div>
+      </fieldset>
+
+      <div class="cmd-out" id="out_trade">Command output appears here.</div>
     </div>
 
-    <div class="pane" id="p_triggers">
-      <div class="panel"><h2>Armed triggers</h2><div class="body" id="trig2">—</div></div>
-      <div class="panel"><h2>Arm a level</h2><div class="body">
-        <div class="row">
-          <input class="sym" id="a_sym" placeholder="SYMBOL">
-          <select id="a_side"><option value="long">long</option><option value="short">short</option></select>
-          <label>above</label><input id="a_above" type="number" step="0.05">
-          <label>below</label><input id="a_below" type="number" step="0.05">
-          <label>qty</label><input id="a_qty" type="number">
-          <label>sl%</label><input id="a_sl" type="number" step="0.01">
+    <div class="pane" id="p_events">
+      <p class="eyebrow">Session history</p>
+      <h1 class="title">Events</h1>
+      <section>
+        <div class="sec-head"><h2>Closed today</h2></div>
+        <div class="panel" id="closed_today">—</div>
+      </section>
+      <section>
+        <div class="sec-head"><h2>Full event log</h2></div>
+        <div class="panel"><div class="scroll-cap" style="max-height:520px" id="events_full">—</div></div>
+      </section>
+    </div>
+
+    <div class="pane" id="p_daemon">
+      <p class="eyebrow">Lifecycle controls</p>
+      <h1 class="title">Daemon</h1>
+
+      <section>
+        <div class="sec-head"><h2>Status</h2></div>
+        <div class="panel"><div class="pb"><dl class="kv" id="daemonStatus">—</dl></div></div>
+      </section>
+
+      <fieldset><legend>Session controls</legend>
+        <div class="field-row">
+          <button class="btn primary" onclick="run('start')">Start</button>
+          <button class="btn danger" onclick="run('stop')">Stop</button>
+          <button class="btn" onclick="run('status')">Status</button>
         </div>
-        <div class="row">
-          <label><input type="checkbox" id="a_auto" style="width:auto"> auto-execute</label>
-          <input class="confirm" id="a_ok" placeholder="type SYMBOL">
-          <button onclick="run('arm',{symbol:v('a_sym'),side:v('a_side'),above:v('a_above'),below:v('a_below'),qty:v('a_qty'),sl_pct:v('a_sl'),auto:c('a_auto')},v('a_ok'))">arm</button>
-          <button onclick="run('disarm',{symbol:v('a_sym')})">disarm</button>
-          <span class="hint">without auto-execute it only alerts</span>
+      </fieldset>
+
+      <fieldset><legend>Quote — no MCP session needed</legend>
+        <div class="field-row">
+          <div class="field"><label>Symbols</label><input id="q_syms" placeholder="HCLTECH INFY" style="width:220px"></div>
+          <button class="btn" onclick="run('quote',{symbols:v('q_syms')})">Quote</button>
         </div>
-      </div></div>
+      </fieldset>
+
+      <fieldset><legend>Seed sl_pct / PDH / PDL — no order placed</legend>
+        <div class="field-row tight">
+          <div class="field"><label>Symbol</label><input class="sym" id="s_sym"></div>
+          <div class="field"><label>SL %</label><input id="s_sl" type="number" step="0.01"></div>
+          <div class="field"><label>PDH</label><input id="s_pdh" type="number" step="0.05"></div>
+          <div class="field"><label>PDL</label><input id="s_pdl" type="number" step="0.05"></div>
+          <button class="btn" onclick="run('add-position',{symbol:v('s_sym'),sl_pct:v('s_sl'),pdh:v('s_pdh'),pdl:v('s_pdl')})">Save seed</button>
+        </div>
+      </fieldset>
+
+      <div class="cmd-out" id="out_daemon">Command output appears here.</div>
     </div>
 
     <div class="pane" id="p_account">
-      <div class="panel"><h2>Kite account</h2><div class="body" id="acct_full">—</div></div>
-      <div class="panel"><h2>Funds</h2><div class="body" id="acct_funds">—</div></div>
+      <p class="eyebrow">Kite account</p>
+      <h1 class="title">Account</h1>
+      <div class="cols">
+        <div class="panel"><div class="ph">Identity</div><div class="pb"><dl class="kv" id="acct_full">—</dl></div></div>
+        <div class="panel"><div class="ph">Funds</div><div class="pb"><dl class="kv" id="acct_funds">—</dl></div></div>
+      </div>
+      <p class="hint" style="margin-top:14px">Used is margin blocked, not money at risk — MIS is ~5x, so notional exposure is roughly 5x this figure. Refreshes every 20s.</p>
     </div>
 
     <div class="pane" id="p_logs">
-      <div class="panel"><h2>Raw technical log</h2><div class="body">
-        <div class="row">
-          <select id="log_src"></select>
-          <label>lines</label><input id="log_n" type="number" value="300" style="width:80px">
-          <button onclick="loadLog()">reload</button>
-          <label><input type="checkbox" id="log_auto" style="width:auto" checked> auto</label>
-          <span class="hint" id="log_meta"></span>
-        </div>
-        <pre class="raw" id="log_text">select a source</pre>
-      </div></div>
+      <p class="eyebrow">Raw technical log</p>
+      <h1 class="title">Logs</h1>
+      <p class="dek">A separate workflow from the Live Log dock — search and filter a full source file, rather than tail one as it grows.</p>
+      <div class="field-row">
+        <div class="field"><label>Source</label><select id="log_src"></select></div>
+        <div class="field"><label>Lines</label><input id="log_n" type="number" value="300" style="width:80px"></div>
+        <button class="btn" onclick="loadLog()">Reload</button>
+        <label class="chk"><input type="checkbox" id="log_auto" checked> auto</label>
+        <span class="hint" id="log_meta"></span>
+      </div>
+      <pre class="raw" id="log_text">select a source</pre>
     </div>
 
     <div class="pane" id="p_claude">
-      <div class="panel"><h2>Skill modes</h2><div class="body">
-        <div class="row" id="modes"></div>
-        <span class="hint">these queue for a Claude session — read with <code>vigil ask --pending</code></span>
-      </div></div>
-      <div class="panel"><h2>Ask</h2><div class="body">
-        <textarea id="q" rows="3" placeholder="e.g. HCLTECH stalled for 2 hours — hold or exit?"></textarea>
-        <div class="row"><button class="go" id="ask">Ask</button><span id="mode" class="hint"></span></div>
-        <div id="qa" style="margin-top:10px"></div>
-      </div></div>
-    </div>
+      <p class="eyebrow">Skill bridge</p>
+      <h1 class="title">Claude</h1>
+      <p class="dek">These queue for a Claude session — read/answered with <code>vigil ask --pending</code> when no CLI is reachable on this machine.</p>
 
-    <div class="panel"><h2>Command output</h2><div class="body">
-      <div id="out" class="dim">Command output appears here.</div>
-    </div></div>
-  </div>
+      <section>
+        <div class="sec-head"><h2>Run a skill mode</h2></div>
+        <div class="mode-row" id="modes"></div>
+      </section>
+
+      <section>
+        <div class="sec-head"><h2>Ask</h2></div>
+        <textarea id="q" rows="3" placeholder="e.g. HCLTECH stalled for 2 hours — hold or exit?"></textarea>
+        <div class="field-row"><button class="btn primary" id="ask">Ask</button><span id="mode" class="hint"></span></div>
+      </section>
+
+      <section>
+        <div class="sec-head"><h2>Queue</h2></div>
+        <div id="qa" class="scroll-cap" style="max-height:420px"></div>
+      </section>
+    </div>
+  </main>
 
   <aside id="live" class="collapsed">
     <button id="railbtn" onclick="liveToggle(true)" title="Show live log">

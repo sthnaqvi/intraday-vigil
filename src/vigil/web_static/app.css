@@ -1,98 +1,377 @@
-:root{--bg:#0f1115;--panel:#171a21;--side:#13161c;--line:#262b36;--fg:#e6e9ef;--dim:#8b93a7;
-      --up:#31c48d;--down:#f05252;--warn:#f0b429;--accent:#6c8cff}
-*{box-sizing:border-box}
-body{margin:0;background:var(--bg);color:var(--fg);height:100vh;display:flex;flex-direction:column;
-     font:14px/1.5 ui-monospace,SFMono-Regular,Menlo,monospace;overflow:hidden}
-header{display:flex;justify-content:space-between;align-items:center;gap:12px;
-       padding:10px 16px;border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
-h1{font-size:13px;margin:0;letter-spacing:.06em;text-transform:uppercase;color:var(--dim)}
-#shell{display:flex;flex:1;min-height:0}
-nav{width:190px;flex:0 0 190px;background:var(--side);border-right:1px solid var(--line);
-    padding:10px 0;overflow-y:auto}
-nav a{display:block;padding:9px 16px;color:var(--dim);cursor:pointer;font-size:13px;
-      border-left:3px solid transparent;user-select:none}
-nav a:hover{color:var(--fg);background:#1a1e26}
-nav a.on{color:var(--fg);background:#1c212b;border-left-color:var(--accent)}
-nav .grp{padding:12px 16px 5px;font-size:10px;letter-spacing:.1em;color:#5c6478;text-transform:uppercase}
-nav .badge{float:right;font-size:10px;padding:1px 6px;border-radius:999px;background:#3a1416;color:var(--down)}
-#content{flex:1;min-width:0;overflow-y:auto;padding:16px}
-.pane{display:none} .pane.on{display:block}
-.panel{background:var(--panel);border:1px solid var(--line);border-radius:8px;
-       overflow:hidden;margin-bottom:14px}
-.panel h2{font-size:11px;margin:0;padding:9px 14px;color:var(--dim);letter-spacing:.09em;
-          text-transform:uppercase;border-bottom:1px solid var(--line)}
-.body{padding:12px 14px;overflow-x:auto}
-table{border-collapse:collapse;width:100%;font-size:13px;white-space:nowrap}
-th{text-align:right;color:var(--dim);font-weight:500;padding:5px 9px;
-   border-bottom:1px solid var(--line);font-size:11px;text-transform:uppercase}
-th:first-child,td:first-child{text-align:left}
-td{text-align:right;padding:6px 9px;border-bottom:1px solid #1e222b}
-tr:last-child td{border-bottom:0}
-.up{color:var(--up)} .down{color:var(--down)} .dim{color:var(--dim)}
-.pill{display:inline-block;padding:2px 8px;border-radius:999px;font-size:11px}
-.ok{background:#123524;color:var(--up)} .bad{background:#3a1416;color:var(--down)}
-.warnp{background:#3a2c10;color:var(--warn)}
-.paper{background:#1b2340;color:var(--accent);font-weight:600}
-.banner{background:#3a1416;border:1px solid var(--down);color:#ffd7d7;
-        padding:10px 14px;border-radius:8px;font-weight:600;margin-bottom:12px}
-.stale{background:#3a2c10;border:1px solid var(--warn);color:#ffe9bf;
-       padding:10px 14px;border-radius:8px;margin-bottom:12px}
-input,select,textarea{background:#0c0e12;color:var(--fg);border:1px solid var(--line);
-      border-radius:6px;padding:7px 9px;font:13px ui-monospace,Menlo,monospace}
-input{width:110px} input.sym{width:125px;text-transform:uppercase}
-textarea{width:100%;resize:vertical}
-button{background:#2a3040;color:var(--fg);border:1px solid var(--line);border-radius:6px;
-       padding:7px 13px;font:600 12px ui-monospace,Menlo,monospace;cursor:pointer}
-button:hover{border-color:var(--accent)}
-button.go{background:var(--accent);color:#fff;border-color:var(--accent)}
-button.danger{background:#5b1a1d;border-color:var(--down);color:#ffd7d7}
-button:disabled{opacity:.45;cursor:default}
-.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:7px 0}
-label{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.05em}
-fieldset{border:1px solid var(--line);border-radius:6px;padding:10px 12px;margin:0 0 10px}
-legend{color:var(--dim);font-size:11px;text-transform:uppercase;letter-spacing:.07em;padding:0 5px}
-.confirm{border-color:var(--down)!important;width:135px}
-.ev{font-size:12px;padding:3px 0;border-bottom:1px solid #1e222b}
-.ev:last-child{border-bottom:0}
-.qa{border:1px solid var(--line);border-radius:6px;padding:10px;margin-bottom:8px}
-.qa .q{color:var(--accent);font-weight:600}
-.qa .a{white-space:pre-wrap;margin-top:5px}
-code{background:#0c0e12;padding:1px 5px;border-radius:4px;color:var(--warn)}
-pre.raw{white-space:pre;background:#0a0c10;border:1px solid var(--line);border-radius:6px;
-        padding:11px;font-size:12px;line-height:1.45;max-height:calc(100vh - 260px);
-        overflow:auto;margin:0}
-#out{white-space:pre-wrap;background:#0c0e12;border:1px solid var(--line);border-radius:6px;
-     padding:10px;font-size:12px;max-height:300px;overflow:auto;margin-top:8px}
-.hint{color:var(--dim);font-size:11px}
-#jserr{display:none;background:#5b1a1d;color:#ffd7d7;padding:8px 16px;font-size:12px}
+:root{
+  --bg:#0a0c10;
+  --surface:#12151b;
+  --surface-2:#181c24;
+  --surface-3:#1e2330;
+  --border:#242a35;
+  --border-soft:#1a1f29;
+  --text:#e8ecf2;
+  --text-dim:#8991a3;
+  --text-faint:#525a6b;
 
-/* ---- live log dock ---- */
-#live{flex:0 0 auto;display:flex;flex-direction:column;background:#0a0c10;
-      border-left:1px solid var(--line);height:100%;min-height:0}
-#live.collapsed{width:44px}
-#live.open{width:min(460px,38vw);min-width:280px}
-#live.left{order:-1;border-left:0;border-right:1px solid var(--line)}
-#railbtn{flex:1;display:flex;flex-direction:column;align-items:center;justify-content:center;
-         gap:8px;background:none;border:0;color:var(--warn);cursor:pointer;padding:0;
-         writing-mode:vertical-rl;letter-spacing:.14em;font-size:11px;text-transform:uppercase}
-#railbtn:hover{background:#12161d;color:#ffd479}
-#railbtn .dot{writing-mode:horizontal-tb;width:7px;height:7px;border-radius:50%;
-              background:var(--up);animation:pulse 1.4s infinite}
-@keyframes pulse{0%,100%{opacity:.25}50%{opacity:1}}
-#livehead{display:flex;align-items:center;gap:6px;padding:7px 9px;background:#12161d;
-          border-bottom:1px solid var(--line);flex:0 0 auto;flex-wrap:wrap}
-#livehead .t{font-size:11px;text-transform:uppercase;letter-spacing:.08em;color:var(--warn);
-             font-weight:600}
-#livehead button{padding:4px 8px;font-size:11px}
-#livehead select,#livehead input{padding:4px 7px;font-size:11px}
-#livesearch{width:120px}
-#livebody{flex:1;min-height:0;overflow:auto;padding:8px 10px;font-size:11.5px;
-          line-height:1.5;white-space:pre-wrap;word-break:break-word;color:#c8cedb}
-#livebody mark{background:#5a4a12;color:#ffe9a8;border-radius:2px}
-#livebody mark.cur{background:var(--warn);color:#221a04}
-#jump{position:absolute;bottom:14px;right:18px;z-index:3;font-size:11px;padding:5px 10px;
-      background:var(--accent);color:#fff;border:0;border-radius:999px;cursor:pointer;
-      box-shadow:0 2px 10px #0008}
-#livewrap{position:relative;flex:1;min-height:0;display:flex}
-.livefoot{padding:4px 9px;font-size:10px;color:var(--dim);border-top:1px solid var(--line);
-          flex:0 0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  --accent:#5c7cfa;
+  --accent-soft:#182140;
+
+  --good:#2fbf82;
+  --good-soft:#0f2a20;
+  --warn:#e6a23c;
+  --warn-soft:#2e2412;
+  --bad:#f0525c;
+  --bad-soft:#321418;
+
+  --shadow: 0 1px 2px rgba(0,0,0,.4), 0 12px 32px -16px rgba(0,0,0,.6);
+  --radius: 10px;
+}
+
+*{ box-sizing:border-box; }
+html{ -webkit-text-size-adjust:100%; }
+body{
+  margin:0; background:var(--bg); color:var(--text);
+  font-family:"Manrope",-apple-system,"Segoe UI",sans-serif;
+  height:100vh; overflow:hidden; display:flex; flex-direction:column;
+  font-size:14px;
+}
+@media (prefers-reduced-motion: reduce){ *{ animation:none!important; transition:none!important; } }
+
+code, .mono{ font-family:"JetBrains Mono",ui-monospace,Menlo,monospace; }
+::selection{ background:var(--accent-soft); color:var(--text); }
+button{ font-family:inherit; }
+button:focus-visible, a:focus-visible, input:focus-visible, select:focus-visible{
+  outline:2px solid var(--accent); outline-offset:1px;
+}
+
+/* ---------- identity strip ---------- */
+header{
+  display:flex; align-items:center; gap:20px;
+  padding:0 20px; height:52px; flex:0 0 auto;
+  background:var(--surface); border-bottom:1px solid var(--border); flex-wrap:wrap;
+}
+.brand{ display:flex; align-items:center; gap:9px; font-weight:800; font-size:15px; letter-spacing:-0.01em; }
+.brand .mark{ width:9px; height:9px; border-radius:2px; background:var(--accent); transform:rotate(45deg); flex:none; }
+.brand .ver{ font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:500; color:var(--text-faint); }
+.who{ display:flex; align-items:baseline; gap:8px; font-size:12.5px; color:var(--text-dim); white-space:nowrap; }
+.who b{ color:var(--text); font-weight:600; }
+.divider{ width:1px; height:18px; background:var(--border); flex:none; }
+.strip-right{ margin-left:auto; display:flex; align-items:center; gap:14px; font-size:12.5px; color:var(--text-dim); }
+.clocktxt{ font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; }
+
+.pill{
+  display:inline-flex; align-items:center; gap:6px;
+  font-family:"JetBrains Mono",monospace; font-size:11px; font-weight:500;
+  letter-spacing:.03em; padding:3px 9px 3px 7px; border-radius:100px; white-space:nowrap;
+}
+.pill .dot{ width:6px; height:6px; border-radius:50%; flex:none; }
+.pill.ok{ background:var(--good-soft); color:var(--good); }
+.pill.ok .dot{ background:var(--good); animation:pulse 1.8s ease-in-out infinite; }
+.pill.bad{ background:var(--bad-soft); color:var(--bad); }
+.pill.warnp{ background:var(--warn-soft); color:var(--warn); }
+.pill.paper{ background:var(--accent-soft); color:var(--accent); font-weight:700; }
+.pill.alert{ background:var(--bad-soft); color:var(--bad); font-weight:700; border:0; cursor:pointer; }
+@keyframes pulse{ 0%,100%{ opacity:1; box-shadow:0 0 0 0 rgba(47,191,130,.5);} 50%{ opacity:.55; box-shadow:0 0 0 4px rgba(47,191,130,0);} }
+
+/* ---------- shell ---------- */
+#shell{ flex:1; min-height:0; display:flex; }
+
+nav{
+  width:172px; flex:0 0 172px; background:var(--surface);
+  border-right:1px solid var(--border); padding:14px 0; overflow-y:auto;
+}
+nav .grp{ padding:14px 16px 6px; font-size:10px; letter-spacing:.11em; text-transform:uppercase; color:var(--text-faint); font-weight:700; }
+nav .grp:first-child{ padding-top:2px; }
+nav a{
+  display:flex; align-items:center; gap:10px; padding:8px 16px;
+  color:var(--text-dim); font-size:13px; font-weight:600; cursor:pointer;
+  border-left:2px solid transparent; user-select:none; position:relative;
+}
+/* Real icons, not Unicode glyphs standing in for them — a glyph like "◆" or "▤" reads as
+   a placeholder, not a designed mark, no matter what color it's given. Dim by default,
+   full text color on hover, and accent-colored with a soft tinted chip behind it when
+   active — the one spot in the nav that should look distinctly "alive," since it's
+   telling you where you are. */
+nav a .ic{
+  width:22px; height:22px; border-radius:6px; flex:none;
+  display:flex; align-items:center; justify-content:center;
+  color:var(--text-faint); transition:background .12s ease, color .12s ease;
+}
+nav a .ic svg{ width:14px; height:14px; }
+nav a:hover .ic{ color:var(--text-dim); }
+nav a.on .ic{ color:var(--accent); background:var(--accent-soft); }
+nav a:hover{ color:var(--text); background:var(--surface-2); }
+nav a.on{ color:var(--text); background:var(--surface-2); border-left-color:var(--accent); }
+nav a .badge{
+  margin-left:auto; font-family:"JetBrains Mono",monospace; font-size:10px; font-weight:600;
+  background:var(--bad-soft); color:var(--bad); padding:1px 6px; border-radius:100px;
+}
+
+main{ flex:1; min-width:0; overflow-y:auto; padding:22px 26px 40px; }
+.pane{ display:none; }
+.pane.on{ display:block; }
+.eyebrow{
+  font-size:11px; font-weight:700; letter-spacing:.1em; text-transform:uppercase;
+  color:var(--text-faint); margin:0 0 4px;
+}
+h1.title{ font-size:19px; font-weight:800; margin:0 0 16px; letter-spacing:-.01em; }
+p.dek{ color:var(--text-dim); font-size:12.5px; margin:-10px 0 18px; max-width:56ch; }
+
+/* ---------- alert banners ---------- */
+.banner{
+  background:var(--bad-soft); border:1px solid var(--bad); color:#ffd7d7;
+  padding:10px 14px; border-radius:var(--radius); font-weight:600; margin-bottom:12px; font-size:13px;
+}
+.stale{
+  background:var(--warn-soft); border:1px solid var(--warn); color:#ffe9bf;
+  padding:10px 14px; border-radius:var(--radius); margin-bottom:12px; font-size:13px;
+}
+
+/* ---------- hero stat row ---------- */
+/* No negative-margin edge bleed here (an earlier version had one, borrowed from a
+   prototype where the hero row was the first thing under main's padding). In the real
+   page #alerts and the eyebrow/title sit above it, so pulling the row up to bleed to
+   main's edge dragged it over the bottom of that content instead — alert banners and the
+   title looked like they were rendering underneath the sticky box. Sitting in normal flow
+   with its own background is enough to stay opaque while stuck; it doesn't need to touch
+   main's border to do that. */
+.hero-row{
+  display:grid; grid-template-columns:repeat(3,1fr); gap:14px;
+  position:sticky; top:0; z-index:5; background:var(--bg);
+  padding-top:2px; padding-bottom:12px; margin-bottom:14px;
+  border-bottom:1px solid var(--border-soft);
+}
+/* A colored top edge per card (set dynamically in app.js by state — up/down for P&L,
+   good/warn/bad for protection) instead of three identical grey boxes distinguished only
+   by the color of some text inside them. Money-management dashboards read state at a
+   glance through the card itself, not by reading numbers first. */
+.hero{
+  background:var(--surface); border:1px solid var(--border); border-top:3px solid var(--border);
+  border-radius:var(--radius); padding:16px 18px; box-shadow:var(--shadow);
+}
+.hero.acc-good{ border-top-color:var(--good); }
+.hero.acc-bad{ border-top-color:var(--bad); }
+.hero.acc-warn{ border-top-color:var(--warn); }
+.hero.acc-accent{ border-top-color:var(--accent); }
+.hero .label{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-faint); }
+.hero .value{ font-family:"JetBrains Mono",monospace; font-size:26px; font-weight:600; margin-top:8px; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
+.hero .sub{ font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--text-dim); margin-top:4px; font-variant-numeric:tabular-nums; }
+.up{ color:var(--good); } .down{ color:var(--bad); } .dim{ color:var(--text-dim); } .warn-c{ color:var(--warn); }
+
+.hero.protection{ display:flex; flex-direction:column; }
+.hero.protection .value{ font-size:18px; display:flex; align-items:center; gap:8px; font-family:"Manrope",sans-serif; font-weight:700; }
+.protection .ring{
+  width:32px; height:32px; border-radius:50%; flex:none;
+  background:conic-gradient(var(--good) 0deg 360deg, var(--border) 0deg);
+  display:flex; align-items:center; justify-content:center;
+}
+.protection .ring::after{ content:""; width:22px; height:22px; border-radius:50%; background:var(--surface); }
+.protection .ring.warn{ background:conic-gradient(var(--warn) 0deg 360deg, var(--border) 0deg); }
+.protection .ring.bad{ background:conic-gradient(var(--bad) 0deg 360deg, var(--border) 0deg); }
+
+/* ---------- section ---------- */
+section{ margin-bottom:16px; }
+.sec-head{ display:flex; align-items:center; gap:10px; margin-bottom:7px; }
+.sec-head h2{ font-size:13px; font-weight:700; margin:0; letter-spacing:-.005em; }
+.sec-head .count{ font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--text-faint); }
+.sec-head .live-tag{
+  margin-left:auto; display:flex; align-items:center; gap:5px;
+  font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--good); letter-spacing:.03em;
+}
+
+.panel{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius); overflow:hidden; box-shadow:var(--shadow); }
+.panel .ph{ padding:8px 14px; border-bottom:1px solid var(--border); font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; color:var(--text-faint); }
+.panel .pb{ padding:16px; }
+.panel + .panel{ margin-top:14px; }
+
+/* overflow-x here (not just -y) matters: at narrow widths — e.g. the live log dock open
+   next to a table with 8+ nowrap columns — a table's intrinsic content width can exceed
+   its container even at width:100%, and with no horizontal scroll of its own the excess
+   columns just spill past the panel edge and become unreachable instead of visible. */
+.scroll-cap{ max-height:220px; overflow-y:auto; overflow-x:auto; }
+.scroll-cap thead th{ position:sticky; top:0; background:var(--surface); z-index:1; }
+#closed_today{ overflow-x:auto; }
+.empty-hint, .scroll-cap .empty-hint{ padding:22px 14px; color:var(--text-faint); font-size:12.5px; text-align:center; display:block; }
+
+/* ---------- tables (shared) ---------- */
+table{ width:100%; border-collapse:collapse; }
+th{
+  text-align:right; font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase;
+  color:var(--text-faint); padding:7px 12px; border-bottom:1px solid var(--border); white-space:nowrap;
+}
+th:first-child, td:first-child{ text-align:left; }
+td{ text-align:right; padding:7px 12px; border-bottom:1px solid var(--border-soft); font-family:"JetBrains Mono",monospace; font-size:12.5px; font-variant-numeric:tabular-nums; }
+tr:last-child td{ border-bottom:0; }
+tr.pos-row:hover{ background:var(--surface-2); }
+.sym{ display:flex; align-items:center; gap:8px; font-weight:600; font-family:"Manrope",sans-serif; }
+.dir-arrow{ width:16px; height:16px; border-radius:4px; display:flex; align-items:center; justify-content:center; font-size:10px; flex:none; }
+.dir-arrow.long{ background:var(--good-soft); color:var(--good); }
+.dir-arrow.short{ background:var(--bad-soft); color:var(--bad); }
+.phase-chip{ font-family:"Manrope",sans-serif; font-size:11px; font-weight:700; padding:3px 9px; border-radius:100px; display:inline-flex; align-items:center; gap:5px; white-space:nowrap; }
+.phase-chip.p1{ background:var(--surface-3); color:var(--text-dim); }
+.phase-chip.p2{ background:var(--accent-soft); color:var(--accent); }
+.phase-chip.p3{ background:var(--good-soft); color:var(--good); }
+.phase-chip.auto{ background:var(--warn-soft); color:var(--warn); }
+.stop-cell{ display:flex; align-items:center; justify-content:flex-end; gap:6px; }
+.stop-ok{ color:var(--text-dim); }
+.stop-bad{ color:var(--bad); font-weight:700; }
+.near-badge{ font-size:10px; font-weight:700; color:var(--warn); background:var(--warn-soft); padding:2px 6px; border-radius:5px; margin-left:6px; }
+
+/* ---------- two-col ---------- */
+.cols{ display:grid; grid-template-columns:1fr 1fr; gap:16px; }
+/* Head line (time/type/symbol) and the data line stack, rather than sitting in one flex
+   row — a data string can run long, and as a third column squeezed next to the time/type
+   in a narrow sidebar it wrapped into many half-empty lines. As its own full-width line
+   below, the same text wraps at most once or twice. */
+.ev{ padding:6px 12px; border-bottom:1px solid var(--border-soft); font-size:12px; }
+.ev:last-child{ border-bottom:0; }
+.ev-head{ display:flex; align-items:baseline; gap:8px; flex-wrap:wrap; }
+.ev .t{ font-family:"JetBrains Mono",monospace; color:var(--text-faint); flex:none; }
+.ev .k{ font-weight:700; color:var(--text); }
+.ev .sym{ color:var(--text-dim); font-family:"JetBrains Mono",monospace; font-size:11px; }
+/* One line, not wrapped: a long data string wrapping across several lines is what made
+   the Recent events list run so long you'd scroll past "recent" into ancient history. Cut
+   to one line with an ellipsis; the full string shows on hover via #evTip (app.js) —
+   not the native title tooltip, which browsers hold back ~1-1.5s before showing. */
+.ev .d{
+  color:var(--text-dim); font-family:"JetBrains Mono",monospace; font-size:11px; margin-top:2px;
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis; cursor:default;
+}
+#evTip{
+  position:fixed; z-index:50; max-width:400px; padding:8px 10px; border-radius:8px;
+  background:var(--surface-3); border:1px solid var(--border); color:var(--text);
+  font-family:"JetBrains Mono",monospace; font-size:11.5px; line-height:1.5;
+  box-shadow:var(--shadow); pointer-events:none; word-break:break-word;
+  opacity:0; transform:translateY(3px); transition:opacity .08s ease, transform .08s ease;
+}
+#evTip.show{ opacity:1; transform:translateY(0); }
+.sec-head .more{
+  margin-left:auto; font-size:11px; font-weight:600; color:var(--text-dim); cursor:pointer;
+  text-decoration:none; white-space:nowrap;
+}
+.sec-head .more:hover{ color:var(--accent); }
+
+/* ---------- Overview: the log beside the tables, not above them ---------- */
+/* Matching the events column's height to the tables beside it is done in JS
+   (syncEventsHeight in app.js), not via grid align-items:stretch + flex:1 — that
+   combination looks right but is circular: a flex:1 scroll-cap with no ancestor height
+   of its own contributes ITS OWN full content height to the grid row's auto-sizing pass,
+   so the row grows to fit all the events instead of the events being capped by the row.
+   The events list then never scrolls internally (scrollHeight ends up equal to
+   clientHeight) and the tables column is stretched to that same inflated height, leaving
+   dead space below the tables that the page still scrolls through. Confirmed by measuring
+   the rendered DOM, not by re-reading this CSS — the numbers only showed up at runtime.
+   JS measuring the sibling's real height and applying it as an explicit max-height has no
+   such circularity. */
+.ov-grid{ display:grid; grid-template-columns:300px 1fr; gap:16px; align-items:start; }
+#events_s{ max-height:480px; }
+/* .ov-side only ever holds this one section, so its default bottom margin has nothing
+   below it to space from — left in, it was ~16px the JS height sync (app.js) didn't
+   know to subtract, which is where the last bit of residual page scroll came from. */
+.ov-side section{ margin-bottom:0; }
+@media (max-width: 980px){
+  .ov-grid{ grid-template-columns:1fr; }
+  #events_s{ max-height:220px !important; }
+}
+
+/* ---------- forms ---------- */
+.field-row{ display:flex; gap:10px; flex-wrap:wrap; align-items:flex-end; margin-bottom:12px; }
+.field{ display:flex; flex-direction:column; gap:5px; }
+.field label{ font-size:10.5px; font-weight:700; letter-spacing:.06em; text-transform:uppercase; color:var(--text-faint); }
+.field input, .field select{
+  background:var(--surface-3); border:1px solid var(--border); border-radius:7px; color:var(--text);
+  padding:8px 10px; font-family:"JetBrains Mono",monospace; font-size:13px; width:118px;
+}
+.field input.sym{ width:130px; text-transform:uppercase; }
+.field input:focus, .field select:focus{ border-color:var(--accent); outline:none; }
+.field-row.tight .field input{ width:90px; }
+.chk{ display:flex; align-items:center; gap:6px; font-size:12px; color:var(--text-dim); cursor:pointer; }
+.chk input{ width:auto; accent-color:var(--accent); }
+fieldset{ border:1px solid var(--border); border-radius:8px; padding:14px 16px; margin:0 0 14px; }
+legend{ padding:0 6px; font-size:11px; font-weight:700; letter-spacing:.05em; text-transform:uppercase; color:var(--text-dim); }
+.btn{
+  background:var(--surface-3); color:var(--text); border:1px solid var(--border); border-radius:7px;
+  padding:9px 16px; font-weight:700; font-size:12.5px; cursor:pointer; white-space:nowrap;
+}
+.btn:hover{ border-color:var(--accent); }
+.btn.primary{ background:var(--accent); border-color:var(--accent); color:#fff; }
+.btn.primary:hover{ filter:brightness(1.08); }
+.btn.danger{ background:var(--bad-soft); border-color:var(--bad); color:#ffd7da; }
+.btn:disabled{ opacity:.4; cursor:default; }
+.confirm{ border-color:var(--bad)!important; }
+
+.cmd-out{
+  background:#07080a; border:1px solid var(--border); border-radius:8px; padding:12px 14px;
+  font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--text-dim); white-space:pre-wrap;
+  min-height:20px; margin-top:4px;
+}
+.cmd-out.ok{ color:var(--good); } .cmd-out.fail{ color:var(--bad); }
+
+.kv{ display:grid; grid-template-columns:132px 1fr; column-gap:20px; row-gap:11px; font-size:13px; align-content:start; }
+.kv dt{ color:var(--text-faint); font-size:11.5px; font-weight:700; letter-spacing:.04em; text-transform:uppercase; align-self:center; }
+.kv dd{ margin:0; font-family:"JetBrains Mono",monospace; font-variant-numeric:tabular-nums; align-self:center; }
+
+/* ---------- Claude pane ---------- */
+.mode-row{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:16px; }
+.mode-btn{
+  background:var(--surface-3); border:1px solid var(--border); border-radius:100px;
+  color:var(--text-dim); font-family:"JetBrains Mono",monospace; font-size:12px; font-weight:500;
+  padding:7px 14px; cursor:pointer;
+}
+.mode-btn:hover{ color:var(--text); border-color:var(--accent); }
+.qa{ border:1px solid var(--border); border-radius:8px; padding:12px 14px; margin-bottom:10px; background:var(--surface-3); }
+.qa .q{ color:var(--accent); font-weight:700; font-size:12.5px; }
+.qa .a{ margin-top:6px; font-size:12.5px; color:var(--text-dim); white-space:pre-wrap; }
+textarea{
+  width:100%; background:var(--surface-3); border:1px solid var(--border); border-radius:8px;
+  color:var(--text); font-family:"JetBrains Mono",monospace; font-size:13px; padding:10px; resize:vertical;
+}
+code{ background:var(--surface-3); padding:1px 5px; border-radius:4px; color:var(--warn); }
+
+/* ---------- raw logs pane ---------- */
+pre.raw{
+  background:#07080a; border:1px solid var(--border); border-radius:8px; padding:14px;
+  font-family:"JetBrains Mono",monospace; font-size:11.5px; line-height:1.6; color:#a9b2c3;
+  white-space:pre-wrap; margin:0; max-height:calc(100vh - 260px); overflow:auto;
+}
+.hint{ color:var(--text-faint); font-size:11.5px; }
+#jserr{ display:none; background:var(--bad-soft); color:#ffd7d7; padding:8px 16px; font-size:12px; }
+
+/* ============================================================
+   Live Log dock — collapsed by default, matching the app's previous
+   behaviour: narrow rail, search with next/prev match, per-source
+   switching, side flip, pinned-to-bottom auto-scroll.
+   ============================================================ */
+#live{ flex:0 0 auto; display:flex; flex-direction:column; background:#07080a; border-left:1px solid var(--border); }
+#live.collapsed{ width:40px; }
+#live.open{ width:min(420px,34vw); min-width:280px; }
+#live.left{ order:-1; border-left:0; border-right:1px solid var(--border); }
+
+#railbtn{
+  flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:10px;
+  background:none; border:0; color:var(--warn); cursor:pointer; padding:0;
+  writing-mode:vertical-rl; letter-spacing:.14em; font-size:11px; font-weight:700; text-transform:uppercase;
+}
+#railbtn:hover{ background:var(--surface-2); color:#ffcf7a; }
+#railbtn .dot{ writing-mode:horizontal-tb; width:7px; height:7px; border-radius:50%; background:var(--good); animation:pulse 1.8s ease-in-out infinite; }
+
+#livehead{ display:flex; align-items:center; gap:6px; padding:8px 10px; background:var(--surface-2); border-bottom:1px solid var(--border); flex:0 0 auto; flex-wrap:wrap; }
+#livehead .t{ font-size:11px; font-weight:700; letter-spacing:.08em; text-transform:uppercase; color:var(--warn); margin-right:2px; }
+#livehead button{ background:var(--surface-3); border:1px solid var(--border); border-radius:6px; color:var(--text-dim); padding:4px 8px; font-size:11px; cursor:pointer; }
+#livehead button:hover{ color:var(--text); border-color:var(--accent); }
+#livehead select, #livehead input{
+  background:var(--surface-3); border:1px solid var(--border); border-radius:6px; color:var(--text);
+  padding:4px 7px; font-family:"JetBrains Mono",monospace; font-size:11px;
+}
+#livesearch{ width:100px; }
+#livematch{ font-family:"JetBrains Mono",monospace; font-size:10.5px; color:var(--text-faint); min-width:30px; text-align:center; }
+
+#livewrap{ position:relative; flex:1; min-height:0; display:flex; }
+#livebody{
+  flex:1; min-height:0; overflow:auto; padding:10px 12px;
+  font-family:"JetBrains Mono",monospace; font-size:11px; line-height:1.65; color:#a9b2c3; white-space:pre-wrap; word-break:break-word;
+}
+#livebody mark{ background:#5a4a12; color:#ffe9a8; border-radius:2px; }
+#livebody mark.cur{ background:var(--warn); color:#221a04; }
+#jump{
+  position:absolute; bottom:14px; right:16px; font-size:11px; font-weight:700; padding:6px 12px;
+  background:var(--accent); color:#fff; border:0; border-radius:100px; cursor:pointer;
+  box-shadow:0 6px 16px -4px rgba(0,0,0,.6); display:none;
+}
+.livefoot{ padding:6px 12px; font-size:10px; color:var(--text-faint); border-top:1px solid var(--border); font-family:"JetBrains Mono",monospace; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
