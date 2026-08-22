@@ -28,8 +28,9 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from vigil import config  # noqa: E402
 from kiteconnect import KiteConnect  # noqa: E402
+
+from vigil import config  # noqa: E402
 
 DOC_PATH = (
     Path(__file__).resolve().parent.parent
