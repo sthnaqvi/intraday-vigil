@@ -25,6 +25,7 @@ from datetime import datetime
 
 from . import clock, config, execution, levels, rules
 from . import state as state_mod
+from .claudelink import enqueue as _claudelink_enqueue
 from .events import EventLog, logger
 from .feed import KiteTickerFeed, PollingFeed
 from .guard import GuardedBroker, TokenException
@@ -164,6 +165,31 @@ class MonitorLoop:
                         trigger=intent.trigger_price, quantity=tp.qty)
         notify(f"{tp.symbol}: SL order was dead — re-placed at {intent.trigger_price}", sound=True)
 
+    def _auto_enqueue(self, question: str, context: dict) -> None:
+        """Fire-and-forget: claudelink.enqueue() blocks on a subprocess for up to 180s
+        when a `claude` CLI is reachable — calling it directly from this loop would stall
+        SL decisions, reconciliation, and tick processing for as long as Claude takes to
+        answer. Runs on its own daemon thread instead, so a slow or hung response never
+        blocks the loop that's actually managing stop-loss orders. The request is written
+        to the queue file synchronously inside enqueue() before the subprocess is even
+        attempted, so if the thread gets killed mid-flight (daemon restart, etc.) the
+        request still survives and can be picked up later with `vigil ask --pending`."""
+        if not config.AUTO_ENQUEUE_ENABLED:
+            return
+
+        def _run() -> None:
+            # An uncaught exception here (disk full, a bad permission on DATA_DIR, ...)
+            # would otherwise just dump a traceback to stderr from a background thread —
+            # invisible in the one place this daemon's failures are actually watched
+            # (logs/algo.log via events.emit). Recorded as a WARNING instead, same as
+            # every other best-effort side path in this loop (levels refresh, resubscribe).
+            try:
+                _claudelink_enqueue(question, context=context)
+            except Exception as e:
+                self.events.emit("WARNING", message=f"auto-enqueue failed: {e!r}")
+
+        threading.Thread(target=_run, daemon=True).start()
+
     # ---------- real-time position decisions (tick-driven) ----------
 
     def _apply_position_decision(self, tp: TrackedPosition, ltp: float) -> None:
@@ -179,6 +205,20 @@ class MonitorLoop:
             tp.phase = new_phase
             self.events.emit("PHASE_CHANGE", tp.symbol, phase=new_phase, profit_r=round(pr, 2))
             notify(f"{tp.symbol} -> Phase {new_phase} ({pr:+.2f}R)")
+            if new_phase == 3:
+                # The significant transition, not every phase change — reaching phase 3
+                # (trailing) means a real trend is underway and is worth a proactive look.
+                # REASSESS, not MONITOR: this is exactly the "bigger move" case the plan
+                # calls out for it — a position that has moved this far is worth checking
+                # against sector rank/thesis-decay, not just a protection-status read.
+                # REASSESS can only ever propose; it still can't place anything unattended.
+                self._auto_enqueue(
+                    f"Run /intraday-vigil reassess — {tp.symbol} just reached phase 3 "
+                    f"(trailing) at {pr:+.2f}R. Re-check its sector rank and whether the "
+                    f"thesis still holds this far into the move.",
+                    context={"symbol": tp.symbol, "phase": new_phase,
+                             "profit_r": round(pr, 2), "ltp": ltp, "entry": tp.entry,
+                             "sl_price": tp.sl_price})
 
         lvls = self._levels_for(tp)
         tick_size = self._tick_cache.get(tp.symbol, config.NSE_TICK)
@@ -357,6 +397,12 @@ class MonitorLoop:
                     except Exception as e:
                         self.events.emit("ERROR", symbol, message=f"re-protect failed: {e!r}")
                         alert_dialog(f"{symbol} is UNPROTECTED and re-protect FAILED: {e}")
+                        self._auto_enqueue(
+                            f"Run /intraday-vigil monitor — {symbol} is UNPROTECTED and "
+                            f"the automatic re-protect attempt FAILED ({e}). Needs an "
+                            f"immediate decision.",
+                            context={"symbol": symbol, "qty": lost["qty"],
+                                     "direction": lost["direction"], "reprotect_error": str(e)})
                         continue
                     # keep phase/breakeven history — this is the same trade, not a new one
                     tp.sl_order_id, tp.sl_price = new_id, trigger
@@ -371,12 +417,30 @@ class MonitorLoop:
                         f"Or exit now:  vigil exit {symbol}"
                     )
                     notify(f"{symbol} HAS NO STOP — {lost['qty']} shares naked", sound=True)
+                    self._auto_enqueue(
+                        f"Run /intraday-vigil monitor — {symbol} has NO STOP, "
+                        f"{lost['qty']} {lost['direction']} shares naked. Needs an "
+                        f"immediate decision: re-protect or exit.",
+                        context={"symbol": symbol, "qty": lost["qty"],
+                                 "direction": lost["direction"],
+                                 "sl_order_status": lost.get("status")})
 
         if self.session.kill_switch and "kill_switch_announced" not in self.session.fired:
             self.session.fired.append("kill_switch_announced")
             self.events.emit("KILL_SWITCH", realized_r=self.session.realized_r_today)
             notify(f"KILL SWITCH: day at {self.session.realized_r_today}R — no new entries",
                    sound=True)
+            # REASSESS, not MONITOR: the day going wrong enough to trip the kill switch is
+            # exactly the "bigger move" case worth a full re-look (sector rank, thesis
+            # decay across every open position), not just a protection-status read. Still
+            # propose-only — no new entries are possible anyway with the switch tripped.
+            self._auto_enqueue(
+                f"Run /intraday-vigil reassess — KILL SWITCH triggered, day at "
+                f"{self.session.realized_r_today}R. No new entries allowed. Re-check every "
+                f"open position's sector rank and thesis, and decide whether any should be "
+                f"exited early.",
+                context={"realized_r_today": self.session.realized_r_today,
+                         "realized_pnl_today": self.session.realized_pnl_today})
 
     def _qty_verify_pass(self, orders) -> None:
         """SL order qty verification. The modify MUST be re-read and confirmed: Kite can
@@ -580,6 +644,8 @@ class MonitorLoop:
                 msg = config.TIME_ALERTS[key][1]
                 self.events.emit("TIME_ALERT", alert=key, message=msg)
                 notify(msg, sound=True)
+                self._auto_enqueue(f"Run /intraday-vigil monitor — time alert: {msg}",
+                                   context={"alert": key, "message": msg})
 
         blocked, why = rules.no_new_entries(now, self.session.kill_switch)
         snapshot = {
@@ -686,6 +752,7 @@ class MonitorLoop:
     def _run_loop(self, force: bool, sleep_fn: Callable, holidays) -> None:
         last_reconcile = 0.0
         last_qty_verify = 0.0
+        last_auto_monitor = 0.0
         while True:
             now = self.now_fn()
             # started before the bell on a market day: wait for the open
@@ -715,6 +782,22 @@ class MonitorLoop:
                     last_reconcile = now_mono
                 if do_qty_verify:
                     last_qty_verify = now_mono
+                # Decoupled from every other cadence here, and off by default
+                # (AUTO_MONITOR_INTERVAL_S == 0) — this is the only auto-enqueue trigger
+                # that fires on a schedule rather than only when something actually
+                # happened, so it's the one with a real, ongoing token cost to opt into.
+                if (config.AUTO_MONITOR_INTERVAL_S > 0
+                        and now_mono - last_auto_monitor >= config.AUTO_MONITOR_INTERVAL_S):
+                    last_auto_monitor = now_mono
+                    self._auto_enqueue(
+                        "Run /intraday-vigil monitor — render the daemon snapshot, check "
+                        "protection, and run the thesis-decay check.",
+                        context={
+                            "positions": [tp.symbol for tp in self.session.positions.values()],
+                            "realized_pnl_today": self.session.realized_pnl_today,
+                            "realized_r_today": self.session.realized_r_today,
+                            "kill_switch": self.session.kill_switch,
+                        })
                 self.failed_cycles = 0
             except TokenException as e:
                 self.events.emit("ERROR", message=f"token expired mid-session: {e}")

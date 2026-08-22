@@ -43,4 +43,24 @@ def isolated_dirs(tmp_path, monkeypatch):
 
     monkeypatch.setattr(monitor_mod, "notify", lambda *a, **k: None)
     monkeypatch.setattr(monitor_mod, "alert_dialog", lambda *a, **k: None)
+    # monitor.py's _auto_enqueue (SL_LOST/KILL_SWITCH/PHASE_CHANGE/TIME_ALERT triggers,
+    # plus the timer) calls claudelink.enqueue() on a background thread from real code
+    # paths several existing tests already drive incidentally — a position reaching phase
+    # 3, or a replay that jumps past several time-alert thresholds at once — without
+    # knowing or caring about auto-enqueue at all. Left running for real, that background
+    # thread does a real file write and can easily outlive the test function that
+    # triggered it; pytest deletes tmp_path right after the test returns, so the write
+    # then fails against an already-deleted directory (an unhandled thread exception).
+    # Muted here the same way notify/alert_dialog are above: monitor.py imports the
+    # function directly (`from .claudelink import enqueue as _claudelink_enqueue`, not
+    # `from . import claudelink`), so patching monitor_mod's own local name has no effect
+    # on vigil.claudelink.enqueue itself — test_claudelink.py, which tests that function
+    # directly, is untouched by this. A test that wants to assert an auto-enqueue
+    # happened patches monitor_mod._claudelink_enqueue, which overrides this default.
+    monkeypatch.setattr(monitor_mod, "_claudelink_enqueue",
+                        lambda *a, **k: {"id": "test", "status": "pending"})
+    # Belt-and-suspenders for claudelink's OTHER call site (webui.py's /api/ask, called
+    # directly — not through monitor.py's local name above): keeps enqueue() in its safe,
+    # request-only queue mode if any test exercises that path without its own CLI mock.
+    monkeypatch.setattr(claudelink, "resolve_cli", lambda: None)
     yield tmp_path

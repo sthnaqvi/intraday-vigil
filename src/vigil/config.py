@@ -76,6 +76,19 @@ KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries
 # `vigil protect SYMBOL` re-places on demand.
 AUTO_REPROTECT = False
 
+# Whether the daemon proactively hands Claude a situation-shaped prompt (via
+# claudelink.enqueue, on a background thread — see monitor.py's _auto_enqueue) when
+# something noteworthy happens: a naked position, the kill switch, a position reaching
+# phase 3, an approaching time-alert cutoff. A second, non-blocking channel alongside the
+# human-facing notify()/alert_dialog() calls already at those same sites — not a
+# replacement for them. Master off switch for both the event triggers above and the timer
+# below; a real token/subprocess cost per firing is still a cost even for rare events.
+AUTO_ENQUEUE_ENABLED = True
+# Timer-triggered MONITOR runs, independent of the event triggers above. 0 disables it —
+# conservative default, since this one fires on a schedule rather than only when something
+# actually happened. Set to e.g. 1800 for a MONITOR check every 30 minutes.
+AUTO_MONITOR_INTERVAL_S = 0
+
 # Session times (IST) — all derived from the NSE MarketProfile (market_profile.py), whose
 # __post_init__ enforces that SQUAREOFF_AT leaves a real head start before
 # BROKER_SQUAREOFF_AT, and whose time_alerts() computes alert text from the actual

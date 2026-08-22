@@ -4,7 +4,9 @@ import time as _time
 from datetime import datetime
 from zoneinfo import ZoneInfo
 
+import vigil.monitor as monitor_mod
 from tests.mock_kite import MockKite
+from vigil import config
 from vigil.broker import Broker
 from vigil.events import EventLog
 from vigil.monitor import MonitorLoop
@@ -369,3 +371,138 @@ def test_reconcile_only_runs_when_due(tmp_path):
 
     loop._tick(loop.now_fn(), do_reconcile=True, do_qty_verify=False)
     assert "SBIN" in loop.session.positions
+
+
+# ---------- auto-enqueue: claudelink.enqueue() fired from the daemon itself ----------
+# _auto_enqueue runs claudelink.enqueue() on a background thread (see monitor.py — it
+# blocks on a subprocess for up to 180s, which must never stall the loop that's managing
+# stop-loss orders), so these tests capture the call via a threading.Event instead of
+# asserting immediately after the triggering _tick()/cycle() call returns.
+
+def _capture_enqueue(monkeypatch):
+    calls = []
+    done = threading.Event()
+
+    def fake_enqueue(question, context=None, run_cli=True):
+        calls.append({"question": question, "context": context})
+        done.set()
+        return {"id": "x", "status": "pending"}
+
+    monkeypatch.setattr(monitor_mod, "_claudelink_enqueue", fake_enqueue)
+    return calls, done
+
+
+def test_auto_enqueue_fires_when_a_position_reaches_phase_3(tmp_path, monkeypatch):
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4270.0, open_=4140, high=4271, low=4100)  # +2.89R -> phase 3
+    loop.cycle()
+
+    assert done.wait(timeout=2), "phase-3 transition never triggered claudelink.enqueue"
+    assert len(calls) == 1
+    assert "phase 3" in calls[0]["question"]
+    # "bigger move" -> reassess (sector rank / thesis check), not a plain monitor read
+    assert "reassess" in calls[0]["question"].lower()
+    assert calls[0]["context"]["symbol"] == "INDIGO"
+    assert calls[0]["context"]["phase"] == 3
+
+
+def test_auto_enqueue_does_not_fire_for_the_breakeven_phase_change(tmp_path, monkeypatch):
+    """1->2 (breakeven) is common and lower-stakes — only reaching phase 3 (trailing) is
+    the "significant" transition worth a proactive Claude look."""
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4192.0, open_=4140, high=4193, low=4100)  # +1.01R -> phase 2
+    loop.cycle()
+
+    assert not done.wait(timeout=0.3)
+    assert calls == []
+
+
+def test_auto_enqueue_fires_when_a_position_is_left_naked(tmp_path, monkeypatch):
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    oid = seed_indigo_long(kite)
+    loop = make_loop(tmp_path, kite)
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()  # discovers + tracks the position, SL intact
+
+    kite.cancel_order("regular", oid)  # SL vanishes outside the daemon
+    kite.set_quote("INDIGO", 4150.0)
+    loop.cycle()  # AUTO_REPROTECT is off by default -> stays naked
+
+    assert done.wait(timeout=2), "a naked position never triggered claudelink.enqueue"
+    assert len(calls) == 1
+    assert "NO STOP" in calls[0]["question"]
+    assert calls[0]["context"]["symbol"] == "INDIGO"
+    # a naked position is an immediate protection question, not a "bigger move" —
+    # monitor, not the heavier reassess
+    assert "monitor" in calls[0]["question"].lower()
+
+
+def test_auto_enqueue_fires_on_kill_switch(tmp_path, monkeypatch):
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    loop = make_loop(tmp_path, kite)
+    loop.session.kill_switch = True
+    # realized_r_today is a computed property (summed from closed trades), not settable
+    loop.session.closed.append({"symbol": "X", "realized_r": -2.1, "realized_pnl": -2000.0})
+    loop.cycle()
+
+    assert done.wait(timeout=2), "the kill switch never triggered claudelink.enqueue"
+    assert len(calls) == 1
+    assert "KILL SWITCH" in calls[0]["question"]
+    # "bigger move" (the whole day, not one position) -> reassess, not a plain monitor read
+    assert "reassess" in calls[0]["question"].lower()
+    assert calls[0]["context"]["realized_r_today"] == -2.1
+
+
+def test_auto_enqueue_fires_on_a_time_alert(tmp_path, monkeypatch):
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    # squareoff_at is 15:00 -> alert_1400 fires at 13:55; 13:56 crosses it without also
+    # crossing alert_1430 (14:25) or squareoff itself.
+    loop = make_loop(tmp_path, kite, now=(13, 56))
+    loop.cycle()
+
+    assert done.wait(timeout=2), "the time alert never triggered claudelink.enqueue"
+    assert len(calls) == 1
+    assert "time alert" in calls[0]["question"]
+    assert "monitor" in calls[0]["question"].lower()
+    assert calls[0]["context"]["alert"] == "alert_1400"
+
+
+def test_auto_enqueue_respects_the_master_off_switch(tmp_path, monkeypatch):
+    monkeypatch.setattr(config, "AUTO_ENQUEUE_ENABLED", False)
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    loop = make_loop(tmp_path, kite)
+    loop.session.kill_switch = True
+    loop.cycle()
+
+    assert not done.wait(timeout=0.3)
+    assert calls == []
+
+
+def test_timer_triggered_monitor_fires_when_configured(tmp_path, monkeypatch):
+    """AUTO_MONITOR_INTERVAL_S is 0 (off) by default; configured to a positive value it
+    fires on the run loop's own schedule — like reconcile/qty-verify, whose own
+    last_*=0.0 start already makes them due on the very first pass, this fires
+    immediately on iteration one rather than needing simulated elapsed time."""
+    monkeypatch.setattr(config, "AUTO_MONITOR_INTERVAL_S", 30)
+    calls, done = _capture_enqueue(monkeypatch)
+    kite = MockKite()
+    loop = make_loop(tmp_path, kite)
+
+    def sleep_once_then_stop(_seconds):
+        raise KeyboardInterrupt  # one pass only, like Ctrl-C
+
+    loop._run_loop(force=True, sleep_fn=sleep_once_then_stop, holidays=set())
+
+    assert done.wait(timeout=2), "the timer never triggered claudelink.enqueue"
+    assert len(calls) == 1
+    assert "monitor" in calls[0]["question"].lower()
