@@ -221,10 +221,17 @@ function render(s){
   // undifferentiated block at a glance, which was part of what made the whole page feel
   // monotone.
   const heroAcc=(el,cls)=>{ const h=el.closest('.hero'); if(h) h.className='hero '+cls; };
+  // Unrealized leads (realized is ₹0 most of the day, before anything's closed);
+  // realized stays a secondary line rather than folding in, since the kill switch
+  // reads realized_pnl_today specifically.
   const pnl=s.realized_pnl_today, rr=s.realized_r_today;
-  $('heroPnl').textContent=money(pnl); $('heroPnl').className='value '+sign(pnl);
-  $('heroR').textContent=(rr>0?'+':'')+n(rr)+'R'; $('heroR').className='sub '+sign(rr);
-  heroAcc($('heroPnl'), pnl>0?'acc-good':pnl<0?'acc-bad':'acc-accent');
+  const unrealizedTotal = s.positions.reduce((sum,p)=>sum+(p.unrealized_pnl||0), 0);
+  $('heroPnl').textContent = s.positions.length ? money(unrealizedTotal) : '₹0';
+  $('heroPnl').className = 'value '+(s.positions.length ? sign(unrealizedTotal) : 'dim');
+  $('heroR').textContent = `realized ${money(pnl)} · ${rr>0?'+':''}${n(rr)}R`;
+  $('heroR').className = 'sub '+sign(pnl);
+  heroAcc($('heroPnl'), !s.positions.length ? 'acc-accent'
+    : unrealizedTotal>0 ? 'acc-good' : unrealizedTotal<0 ? 'acc-bad' : 'acc-accent');
   const a=s.account||{};
   $('heroAvail').textContent = a.paper ? 'PAPER' : money(a.available);
   const usedTot=Number(a.used||0), totTot=usedTot+Number(a.available||0);
