@@ -160,6 +160,39 @@ def test_execute_derives_sl_from_actual_fill_not_the_trigger_level(tmp_path, mon
     assert 1330 < sl < 1340
 
 
+def test_execute_warns_but_still_places_when_guard_pushes_sl_past_the_cap(tmp_path, monkeypatch):
+    """A real live incident (2026-08-24): a 1.1% input sl_pct passed the pre-trade cap
+    check cleanly, but its raw SL (1042.55) landed within the guard's 0.3% buffer of PDH
+    (1040.45, distance 0.20%) — a real, correct guard decision since the position had just
+    broken out above it. The guard pushed the SL to 1037.33 to stay clear, which by itself
+    implies an effective width of ~1.60%, over the 1.5% cap the pre-trade check exists to
+    enforce. The position is already open by this point (entry already filled) — refusing
+    the SL leg would leave it naked, and clamping back to exactly the cap would put the
+    stop right back inside the level the guard just avoided. So this must not refuse:
+    it must place the (wider) guarded SL anyway and make the breach loud instead of only
+    discoverable later by hand-computing sl_pct from `vigil status --json`, as happened
+    live."""
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 24, 11, 42, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("HINDALCO", 1054.145)
+    t = T.Trigger("HINDALCO", "LONG", 1050.0, "above", 628, 0.011,
+                  auto=True, pdh=1040.45, pdl=1024.6)
+
+    assert T.execute(t, broker, events, FakeSession(), 1054.145) is True, \
+        "a post-guard cap breach must not block placing the SL"
+
+    sl = kite.place_calls[1]["trigger_price"]
+    effective = abs(1054.145 - sl) / 1054.145
+    assert effective > 0.015, f"test setup didn't actually breach the cap, sl={sl}"
+
+    warnings = _events(tmp_path, "SL_CAP_EXCEEDED_POST_GUARD")
+    assert len(warnings) == 1
+    assert warnings[0]["symbol"] == "HINDALCO"
+    assert warnings[0]["data"]["input_sl_pct"] == 0.011
+    assert warnings[0]["data"]["effective_sl_pct"] == round(effective, 4)
+
+
 def test_execute_rounds_sl_to_the_symbols_own_tick_not_the_nse_default(tmp_path, monkeypatch):
     """DRREDDY (and other 0.10-tick scrips) must not get an SL rounded to the 0.05
     default: the exchange rejects a trigger price that isn't a multiple of the script's

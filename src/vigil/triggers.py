@@ -206,6 +206,25 @@ def execute(trigger: Trigger, broker: GuardedBroker, events: EventLog, session: 
     guard_levels = [v for v in (trigger.pdh, trigger.pdl) if v]
     tick = levels.tick_sizes(broker, [trigger.symbol])[trigger.symbol]
     sl_price = rules.initial_sl_price(fill, trigger.sl_pct, trigger.dir, guard_levels, tick)
+
+    # The 1.5% cap is checked against the caller's INPUT sl_pct before this point (cmd_enter,
+    # TriggerEngine) — but the stop-hunt guard above can still widen the price it just
+    # computed past that cap, since the guard pushes clear of PDH/PDL/day-H/L regardless of
+    # what width that implies. Clamping back to exactly 1.5% here would put the stop right
+    # back inside the level the guard just pushed clear of, so this doesn't refuse or
+    # shrink it — it makes the breach loud and visible instead of only discoverable later by
+    # hand-computing sl_pct from `vigil status --json`. See docs/incidents/trail-and-sl-lifecycle.md
+    # ("The cap check ran before the guard that could break it").
+    effective_sl_pct = abs(fill - sl_price) / fill if fill else trigger.sl_pct
+    if effective_sl_pct > 0.015:
+        events.emit("SL_CAP_EXCEEDED_POST_GUARD", trigger.symbol,
+                    input_sl_pct=trigger.sl_pct, effective_sl_pct=round(effective_sl_pct, 4),
+                    fill=fill, sl_price=sl_price, guard_levels=guard_levels)
+        notify(f"{trigger.symbol}: stop-hunt guard widened the SL to "
+              f"{effective_sl_pct:.2%}, over the 1.5% cap (input was "
+              f"{trigger.sl_pct:.2%}). Placing anyway — pulling it back to the cap would "
+              "put the stop inside the level the guard just avoided. Review manually.",
+              sound=True)
     try:
         sl_id = execution.place_sl(broker, trigger.symbol, trigger.dir, sl_price, trigger.qty)
         trigger.sl_order_id = sl_id
