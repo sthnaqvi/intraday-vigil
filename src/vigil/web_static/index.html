@@ -42,9 +42,12 @@
 
       <div class="hero-row">
         <div class="hero">
-          <div class="label">Open P&amp;L</div>
+          <div class="label">Total P&amp;L</div>
           <div class="value" id="heroPnl">—</div>
-          <div class="sub" id="heroR">—</div>
+          <div class="sub-lines">
+            <div class="sub-line emph" id="heroUnreal">—</div>
+            <div class="sub-line" id="heroReal">—</div>
+          </div>
         </div>
         <div class="hero">
           <div class="label">Available</div>
@@ -76,6 +79,13 @@
           <section>
             <div class="sec-head"><h2>Armed triggers</h2><span class="count" id="trig_count"></span></div>
             <div class="panel"><div class="scroll-cap" id="trig">—</div></div>
+          </section>
+          <section>
+            <div class="sec-head">
+              <h2>Closed today</h2><span class="count" id="closed_count_ov"></span>
+              <a class="more" onclick="document.querySelector('nav a[data-pane=events]').click()">Full log →</a>
+            </div>
+            <div class="panel" id="closed_today_ov">—</div>
           </section>
         </div>
       </div>

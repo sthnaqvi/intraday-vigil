@@ -127,9 +127,12 @@ function evList(events,limit){
 
 function closedTable(s){
   if(!s.closed_today.length) return '<div class="pb"><span class="hint">No closed positions today.</span></div>';
-  return `<table><thead><tr><th>Symbol</th><th>Reason</th><th>Exit</th><th>R</th><th>P&amp;L</th></tr></thead><tbody>`+
-    s.closed_today.map(x=>`<tr class="pos-row"><td>${esc(x.symbol)}</td>
-      <td style="color:var(--text-dim)">${esc(x.exit_reason)}</td><td>${n(x.exit_price)}</td>
+  return `<table><thead><tr>
+    <th>Symbol</th><th>Qty</th><th>Entry</th><th>Exit</th><th>Reason</th><th>R</th><th>P&amp;L</th></tr></thead><tbody>`+
+    s.closed_today.map(x=>`<tr class="pos-row">
+      <td><div class="sym">${dirArrow(x.direction)}${esc(x.symbol)}</div></td>
+      <td>${x.qty}</td><td>${n(x.entry)}</td><td>${n(x.exit_price)}</td>
+      <td style="color:var(--text-dim)">${esc(x.exit_reason)}</td>
       <td class="${sign(x.realized_r)}">${n(x.realized_r)}</td>
       <td class="${sign(x.realized_pnl)}">${money(x.realized_pnl)}</td></tr>`).join('')
     +`</tbody></table>`;
@@ -149,7 +152,8 @@ function renderAccount(a){
   $('acctFunds').innerHTML=a.paper
     ? `<span class="pill paper">PAPER — no real money</span>`
     : `avail <b class="up">${money(a.available)}</b> · used <b>${money(a.used)}</b>`
-      + (a.m2m_unrealised!=null ? ` · M2M <b class="${sign(a.m2m_unrealised)}">${money(a.m2m_unrealised)}</b>` : '');
+      + (a.m2m_unrealised!=null ? ` · M2M unrealized <b class="${sign(a.m2m_unrealised)}">${money(a.m2m_unrealised)}</b>` : '')
+      + (a.m2m_realised!=null ? ` · realized <b class="${sign(a.m2m_realised)}">${money(a.m2m_realised)}</b>` : '');
 
   $('acct_full').innerHTML=`
     <dt>Client ID</dt><dd>${esc(a.client_id||'—')}</dd>
@@ -221,17 +225,22 @@ function render(s){
   // undifferentiated block at a glance, which was part of what made the whole page feel
   // monotone.
   const heroAcc=(el,cls)=>{ const h=el.closest('.hero'); if(h) h.className='hero '+cls; };
-  // Unrealized leads (realized is ₹0 most of the day, before anything's closed);
-  // realized stays a secondary line rather than folding in, since the kill switch
-  // reads realized_pnl_today specifically.
+  const dot=cls=>`<span class="dot ${cls}" style="background:currentColor"></span>`;
+  // Total leads (what the day actually did to the account); unrealized is called out
+  // as its own emphasized line below it since that's what's live and worth watching
+  // most of the day, with realized alongside it since the kill switch reads
+  // realized_pnl_today specifically.
   const pnl=s.realized_pnl_today, rr=s.realized_r_today;
   const unrealizedTotal = s.positions.reduce((sum,p)=>sum+(p.unrealized_pnl||0), 0);
-  $('heroPnl').textContent = s.positions.length ? money(unrealizedTotal) : '₹0';
-  $('heroPnl').className = 'value '+(s.positions.length ? sign(unrealizedTotal) : 'dim');
-  $('heroR').textContent = `realized ${money(pnl)} · ${rr>0?'+':''}${n(rr)}R`;
-  $('heroR').className = 'sub '+sign(pnl);
-  heroAcc($('heroPnl'), !s.positions.length ? 'acc-accent'
-    : unrealizedTotal>0 ? 'acc-good' : unrealizedTotal<0 ? 'acc-bad' : 'acc-accent');
+  const total = pnl + unrealizedTotal;
+  $('heroPnl').textContent = money(total);
+  $('heroPnl').className = 'value '+sign(total);
+  const uSign = s.positions.length ? sign(unrealizedTotal) : 'dim';
+  $('heroUnreal').innerHTML = `${dot(uSign)}Unrealized ${s.positions.length ? money(unrealizedTotal) : '₹0'}`;
+  $('heroUnreal').className = 'sub-line emph '+uSign;
+  $('heroReal').innerHTML = `${dot(sign(pnl))}Realized ${money(pnl)} · ${rr>0?'+':''}${n(rr)}R`;
+  $('heroReal').className = 'sub-line '+sign(pnl);
+  heroAcc($('heroPnl'), sign(total)==='up' ? 'acc-good' : sign(total)==='down' ? 'acc-bad' : 'acc-accent');
   const a=s.account||{};
   $('heroAvail').textContent = a.paper ? 'PAPER' : money(a.available);
   const usedTot=Number(a.used||0), totTot=usedTot+Number(a.available||0);
@@ -268,6 +277,8 @@ function render(s){
   $('events_s').innerHTML=evList(s.events,40);
   $('events_full').innerHTML=evList(s.events,200);
   $('closed_today').innerHTML=closedTable(s);
+  $('closed_today_ov').innerHTML=closedTable(s);
+  $('closed_count_ov').textContent = s.closed_today.length ? `(${s.closed_today.length})` : '';
 
   // ---- daemon pane ----
   const cad=s.cadence||{};

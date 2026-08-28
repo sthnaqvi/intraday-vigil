@@ -152,6 +152,11 @@ p.dek{ color:var(--text-dim); font-size:12.5px; margin:-10px 0 18px; max-width:5
 .hero .label{ font-size:11px; font-weight:700; letter-spacing:.07em; text-transform:uppercase; color:var(--text-faint); }
 .hero .value{ font-family:"JetBrains Mono",monospace; font-size:26px; font-weight:600; margin-top:8px; letter-spacing:-.01em; font-variant-numeric:tabular-nums; }
 .hero .sub{ font-family:"JetBrains Mono",monospace; font-size:12px; color:var(--text-dim); margin-top:4px; font-variant-numeric:tabular-nums; }
+.hero .sub-lines{ margin-top:7px; display:flex; flex-direction:column; gap:4px; }
+.hero .sub-line{ font-family:"JetBrains Mono",monospace; font-size:12px; font-variant-numeric:tabular-nums; display:flex; align-items:center; gap:6px; }
+.hero .sub-line.up{ color:var(--good); } .hero .sub-line.down{ color:var(--bad); } .hero .sub-line.dim{ color:var(--text-dim); }
+.hero .sub-line .dot{ width:6px; height:6px; border-radius:50%; flex:none; }
+.hero .sub-line.emph{ font-size:13px; font-weight:600; }
 .up{ color:var(--good); } .down{ color:var(--bad); } .dim{ color:var(--text-dim); } .warn-c{ color:var(--warn); }
 
 .hero.protection{ display:flex; flex-direction:column; }
