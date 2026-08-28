@@ -1,5 +1,57 @@
 # Changelog
 
+## 0.2.0 — 2026-08-29
+
+### Added
+- `.github/workflows/release.yml` — on a `v*` tag push, verifies the tag matches
+  `pyproject.toml`'s version, builds the package, publishes a GitHub Release (with the
+  matching CHANGELOG section as its body and the wheel/sdist attached), and uploads to
+  PyPI via trusted publishing (OIDC — no stored token). `workflow_dispatch` lets an
+  already-pushed tag be released retroactively.
+- Dashboard: a "Closed today" section on the Overview pane, just below Armed triggers, so
+  today's exits are visible without switching to the Events pane — with Qty and Entry
+  columns added to that table on both its Overview and Events copies.
+
+### Changed
+- Dashboard hero card now leads with Total P&L (realized + unrealized) instead of
+  unrealized alone, with Unrealized and Realized broken out as their own sign-colored
+  lines below it. Also fixes a latent CSS specificity bug where those lines never
+  actually rendered red/green regardless of sign.
+- Dashboard account header now shows both M2M unrealized and M2M realized (was
+  unrealized-only), matching what the Account pane's detail table already had.
+- `TRIGGER_FIRED` and `vigil enter`'s detail line now report the *effective* stop width
+  and rupee risk from the fill — not the caller's requested `sl_pct` — alongside the
+  requested value as `input_sl_pct`. A widened stop-hunt guard or a slipped fill used to
+  leave both of these carrying a number the trade had already invalidated.
+- `vigil enter`'s stop-hunt guard can still widen a placed SL past the 1.5% cap when
+  clearing a nearby PDH/PDL/day-H/L level (the position is already open by then, so
+  refusing isn't viable). This is now loudly flagged — a distinct `SL_CAP_EXCEEDED_POST_GUARD`
+  event plus a notification — instead of only discoverable by hand-checking `vigil status
+  --json` afterward.
+
+### Fixed
+- A closed position's day-R contribution was summed per exit leg instead of
+  quantity-weighted per position, double-counting any position that exited in more than
+  one piece and able to trip `KILL_SWITCH_R` on a day barely 1R down.
+- On a dual-stack host where IPv6 won the default route, every order call
+  (`place_order`/`modify_order`/`cancel_order`) egressed from an address never on Kite's
+  IP whitelist and was rejected — invisibly, since read endpoints ignore the whitelist and
+  keep working, so the daemon still reported itself healthy. Outbound connections are now
+  pinned to IPv4 (`VIGIL_FORCE_IPV4=0` to opt out); `vigil start` logs which family broker
+  traffic actually leaves on.
+- CI's `test` job failed collection on every Python version — `tests/` was missing
+  `__init__.py`, so bare `pytest` (what CI runs, vs. `python -m pytest` used locally)
+  couldn't resolve the `from tests.X import Y` absolute imports used across 9 test files.
+
+### Docs
+- Recorded two process findings from a zero-trade session RCA in `docs/incidents/`: an
+  expectancy figure computed on the wrong sample (wrong conditioning, one session in one
+  regime, and non-wins treated as full stop-outs rather than including the
+  drift-to-breakeven case) that nearly talked the user out of a setup a proper study later
+  showed to be positive-expectancy; and a sector ranking run four hours after the open
+  with its percent-from-open metric left stale, so the top-ranked sector's apparent lead
+  had actually finished over an hour earlier.
+
 ## 0.1.0 — 2026-08-23
 
 First tagged release. Carries the `0.1.0.dev0` work below from a poll-driven prototype to

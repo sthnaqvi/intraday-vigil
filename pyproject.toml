@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "intraday-vigil"
-version = "0.1.0"
+version = "0.2.0"
 description = "Bell-to-bell intraday trading, watched."
 readme = "README.md"
 license = "MIT"
