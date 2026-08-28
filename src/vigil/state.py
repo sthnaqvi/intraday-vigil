@@ -60,7 +60,46 @@ class SessionState:
 
     @property
     def realized_r_today(self) -> float:
-        return round(float(sum(c["realized_r"] for c in self.closed)), 3)
+        """Day R, aggregated per position rather than per exit leg.
+
+        Each closed record's `realized_r` is a *per-share* multiple (see
+        `rules.realized_r`), so it does not scale with quantity. Summing it across legs
+        therefore double-counts any position that left in more than one piece: a single
+        stop-out that filled as a partial plus a remainder reported ~-2R for a position
+        that had lost ~1R, which tripped `KILL_SWITCH_R` at roughly half the intended
+        daily loss and shut off new entries hours early.
+
+        Legs of one position are quantity-weighted so the position contributes its own
+        R once; separate positions still add up. Legs are grouped by symbol *and* entry
+        price so that re-entering the same symbol later in the day stays a distinct
+        position rather than being blended into the earlier one.
+
+        Only `realized_r` is required, as before. A record without `symbol`/`entry` (a
+        legacy or hand-built session file) is counted on its own rather than raising —
+        this property gates the kill switch, so it must not be the thing that throws.
+        """
+        groups: dict[tuple[str, float], list[dict[str, Any]]] = {}
+        for i, c in enumerate(self.closed):
+            symbol, entry = c.get("symbol"), c.get("entry")
+            key = (
+                (str(symbol), round(float(entry), 4))
+                if symbol is not None and entry is not None
+                else ("", float(i))  # unattributable leg — its own position
+            )
+            groups.setdefault(key, []).append(c)
+
+        total = 0.0
+        for legs in groups.values():
+            qty = sum(abs(float(leg.get("qty") or 0)) for leg in legs)
+            if qty <= 0:
+                # No quantity recorded to weight by — fall back to the plain sum rather
+                # than silently dropping the position from the day's R.
+                total += sum(float(leg["realized_r"]) for leg in legs)
+                continue
+            total += sum(
+                float(leg["realized_r"]) * abs(float(leg.get("qty") or 0)) for leg in legs
+            ) / qty
+        return round(total, 3)
 
     @property
     def realized_pnl_today(self) -> float:

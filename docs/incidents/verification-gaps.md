@@ -258,3 +258,65 @@ to protect any of it.
 rupee risk and the effective stop percentage from the fill and report both before anything
 else — and when the fill moves either materially, say so unprompted rather than letting the
 approved figure stand unchallenged as the record of what was taken.
+
+## A stop-refusal guard held, and the process died through a different door
+
+An earlier session in this log produced a guard: the daemon now refuses a `stop` command
+issued inside the window between its own scheduled square-off and the venue's forced one,
+unless an explicit override flag is passed. That guard shipped, and on a later session it
+fired exactly as designed — a `stop` issued inside the window was refused, with a non-zero
+exit code, while a position was still open.
+
+The position was force-closed by the venue anyway. About a minute after the refusal the
+daemon simply stopped: last heartbeat written, then nothing — no stop event, no error, no
+traceback, no further command invocation of any kind in any of the three logs. The process
+had ended outside the CLI entirely (a kill, a closed terminal, or the host sleeping — the
+gap spanned tens of minutes and ended with a burst of activity consistent with a machine
+waking). The scheduled square-off never ran. The venue's own administrative square-off
+cancelled the resting stop and market-sold the position instead.
+
+The financial cost was approximately zero, because the forced fill happened to land within
+a rounding error of where the position had marked when the daemon went quiet. That is the
+third session on which the scheduled square-off did not run, and the third time the outcome
+was decided by which way the closing minutes happened to drift.
+
+The verification gap is precise: the guard defends the *command path*, and everything
+downstream assumed that a daemon which had not been asked to stop was still running. Nothing
+ever asserted the square-off had actually executed. A refusal proves a command was blocked;
+it proves nothing about whether the process survived to do its job.
+
+**Fix:** treat "the square-off ran" as something to be observed rather than inferred.
+Liveness has to be signalled from outside the daemon's own event stream — a heartbeat with a
+staleness alarm, a supervisor restart policy, or a second lightweight watchdog able to fire
+the square-off if the primary has gone quiet. The invariant worth protecting is not "nobody
+stops the daemon" but "the exit is confirmed to have happened."
+
+## A risk metric was summed instead of weighted, and tripped its own safety switch
+
+A position exited in two legs — a partial fill first, then the remainder a few seconds
+later. Each leg was logged with its own R multiple, both close to −1R, which is correct:
+each leg individually lost about one unit of risk per share.
+
+The day's aggregate then **added them together**. Two legs of one position, each near −1R,
+were recorded as a day approaching −2R. The position had lost almost exactly 1R in total, as
+a stop-out is designed to. Checking against the money settles it immediately: dividing the
+total realised loss by the position's full 1R currency value gives −1.02, and
+quantity-weighting the two legs gives the same figure. Summing per-leg multiples double-counts, and the error scales
+with the number of legs.
+
+The consequence was not cosmetic. The daily kill switch triggers on that aggregate. It fired
+on a day that was genuinely a shade over 1R down, against a 2R threshold, disabling new
+entries for the rest of the session hours before it should have. On that particular day it
+cost nothing — the entry cutoff was close and nothing qualified anyway — but a partial fill
+early in a session would shut the book with most of the day still to trade.
+
+The general shape: a derived metric was never sanity-checked against the underlying currency
+figure it summarises, and a safety interlock consumed it without a plausibility check of its
+own. A single position hitting a single stop cannot lose 2R; the threshold had no way to
+notice that its input was impossible.
+
+**Fix:** aggregate the day from realised P&L against each position's full 1R currency value,
+or quantity-weight the per-leg multiples. Keep the per-leg figures in the event log, where
+they are meaningful — the defect is in the aggregation alone, and the threshold itself was
+correct.
+
