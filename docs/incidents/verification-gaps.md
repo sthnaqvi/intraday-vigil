@@ -229,3 +229,32 @@ proves which address is being used, not that the broker will accept orders from 
 **Rule:** a process that has proven it can *read* has proven nothing about whether it can
 *act*. Anything trusted to protect a position must verify the write path before claiming to
 be protecting anything.
+## An approved risk figure was never re-checked against the fill that replaced it
+
+A long was quoted to the user at a specific price, with a stop derived from that price, an
+effective stop width just above one percent, and a total rupee risk the user explicitly
+approved before the order went in. The order filled a little under a quarter of a percent
+higher — ordinary slippage in the seconds between quoting and placing.
+
+The daemon behaved correctly throughout. It re-derived the stop from the *actual* fill with
+the stop-hunt guard applied, and wrote the true effective stop percentage into the risk seed,
+so the seed and the resting exchange order agreed exactly. Nothing in the system was
+inconsistent.
+
+What was inconsistent was the number the human was working from. Measured against the real
+fill, the position carried close to twenty percent more rupee risk than the figure approved,
+and its effective stop width had moved from comfortably inside the cap to sitting a few
+hundredths of a percent below it.
+
+The extra risk was not the damage. A stop that wide puts the 1R breakeven trigger *above*
+the prior day's high — so the position could not reach the breakeven phase without first
+clearing a major resistance level, and the entire protect-then-trail lifecycle was
+unreachable from the instant of the fill. Nobody was told, because the approved plan's
+numbers were never restated. The position went on to run several R in the user's favour on
+paper and was closed manually at a fraction of that, with the daemon never having been able
+to protect any of it.
+
+**Fix:** the approval is on the plan; the fill is the trade. After every entry, recompute the
+rupee risk and the effective stop percentage from the fill and report both before anything
+else — and when the fill moves either materially, say so unprompted rather than letting the
+approved figure stand unchallenged as the record of what was taken.

@@ -241,10 +241,22 @@ def execute(trigger: Trigger, broker: GuardedBroker, events: EventLog, session: 
 
     trigger.status = FIRED
     trigger.fired_at = clock.now_ist().isoformat()
-    trigger.detail = f"entry {fill} sl {sl_price}"
+    # Report the stop and risk the FILL bought, not the ones the pre-trade quote implied.
+    # Slippage between quoting and placing moves both, and the seed already stores the
+    # effective width (`_write_seed`) — so leaving the input width in the detail line and
+    # the audit event made them the only two places still carrying a number the trade had
+    # invalidated. Once that hid a ~19% risk overshoot and a stop wide enough to put the
+    # 1R breakeven trigger above PDH, making Phase 2 unreachable from the moment of the
+    # fill with nothing reporting it. See docs/incidents/verification-gaps.md ("An
+    # approved risk figure was never re-checked against the fill that replaced it").
+    risk = abs(fill - sl_price) * trigger.qty
+    trigger.detail = (f"entry {fill} sl {sl_price} "
+                      f"({effective_sl_pct:.2%} effective, risk Rs {risk:,.0f})")
     _write_seed(trigger, fill, sl_price)
     events.emit("TRIGGER_FIRED", trigger.symbol, level=trigger.level, entry=fill,
-                qty=trigger.qty, sl_price=sl_price, sl_pct=trigger.sl_pct,
+                qty=trigger.qty, sl_price=sl_price,
+                sl_pct=round(effective_sl_pct, 4), input_sl_pct=trigger.sl_pct,
+                risk=round(risk, 2),
                 entry_order_id=trigger.entry_order_id, sl_order_id=trigger.sl_order_id,
                 auto=trigger.auto)
     notify(f"{trigger.symbol} ENTERED {trigger.direction} {trigger.qty} @ {fill}, "

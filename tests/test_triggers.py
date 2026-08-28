@@ -146,6 +146,40 @@ def test_execute_places_entry_then_guarded_sl_and_writes_seed(tmp_path, monkeypa
     assert _events(tmp_path, "TRIGGER_FIRED")
 
 
+def test_fired_event_and_detail_carry_effective_sl_pct_not_the_input(tmp_path, monkeypatch):
+    """The seed stores the width the fill actually bought; the audit event and the printed
+    detail line must agree with it.
+
+    They used not to: both echoed the caller's *input* sl_pct, so a stop widened by the
+    stop-hunt guard (or an entry that slipped between quote and fill) left the event log
+    and the console claiming a width the trade never had. An RCA reading the log then
+    computes the wrong R and the wrong risk.
+    """
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    # PDH 1320.80 forces the guard to push the stop below it, so the effective width
+    # necessarily differs from the 0.8% asked for.
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.008,
+                  auto=True, pdh=1320.8, pdl=1298.1)
+
+    assert T.execute(t, broker, events, FakeSession(), 1329.0) is True
+
+    fired = _events(tmp_path, "TRIGGER_FIRED")[0]["data"]
+    seed = json.loads(config.RISK_FILE.read_text())["RELIANCE"]
+
+    assert fired["sl_pct"] == seed["sl_pct"], (
+        "audit event and risk seed must report the same effective width")
+    assert fired["input_sl_pct"] == 0.008, "the requested width stays available for diffing"
+    assert fired["sl_pct"] != fired["input_sl_pct"], (
+        "guard widened the stop, so effective and input must differ here")
+
+    expected_risk = abs(fired["entry"] - fired["sl_price"]) * 100
+    assert fired["risk"] == pytest.approx(expected_risk, abs=0.01)
+    assert "effective" in t.detail and "risk" in t.detail
+
+
 def test_execute_derives_sl_from_actual_fill_not_the_trigger_level(tmp_path, monkeypatch):
     """A gap through the level must not anchor the stop to a price we never got."""
     monkeypatch.setattr(T.clock, "now_ist",

@@ -180,3 +180,31 @@ last hour or ninety minutes of intraday candles — *alongside* percent-from-ope
 columns, and state which one the selection rests on. And say plainly that a morning metric is
 being run at midday, rather than running it silently and letting the ranking look more
 current than it is.
+## A breakout was entered long after its high had printed
+
+A stock broke a multi-hour range on the two largest volume bars of its day, each larger than
+the last, and pushed to a new session high. The read was correct — it was a genuine
+expanding-volume breakout.
+
+The order was placed roughly twenty minutes after that high. The stock never traded above the
+entry again. It faded back into the broken range within half an hour, lost the breakout level
+twice, and was closed by the daemon's own scheduled square-off for the largest single loss of
+the session — on its own, more than the day's other trades combined.
+
+The delay was not hesitation. It was spent on legitimate work: re-ranking sectors, checking
+VWAP relationships, running the counter-trend test on the alternative candidate, building the
+sizing table. All of it correct, and all of it applied to a move that was completing while it
+was being checked. By the time the order went in, the trade that had been analysed no longer
+existed. What was actually bought was a retest of a level that had already been rejected
+once, several points above the breakout bar, sized and stopped for the original idea.
+
+A second, compounding error sat alongside it. The alternative candidate had scored identically
+on the same rubric, and the choice put to the user was a false binary — one or the other,
+never both at reduced size, which the available margin would comfortably have supported. The
+split would have left the pair close to flat where the single position was deep in the red.
+
+**Fix:** on a breakout entry, the age of the extreme is part of the setup. If the high is more
+than about two bars old, what is on offer is a retest — different levels, different stop,
+different odds. Re-derive it as that trade or skip it, but do not place the breakout order
+against it. And when two candidates score equally, splitting is a real option: put it on the
+list rather than forcing a choice between them.
