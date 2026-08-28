@@ -76,6 +76,13 @@ KILL_SWITCH_R = -2.0      # daily realised R at/below which no new entries
 # `vigil protect SYMBOL` re-places on demand.
 AUTO_REPROTECT = False
 
+# Pin outbound connections to IPv4 (see netconfig.py). Kite applies its static-IP whitelist
+# to order endpoints only, so on a dual-stack host with an IPv6 default route the daemon
+# logs in, reads quotes and reports itself live while every order is rejected — a failure
+# that stays invisible until the first order. Defaulting to IPv4 makes the egress address
+# deterministic and matchable against the whitelist. VIGIL_FORCE_IPV4=0 disables it.
+FORCE_IPV4 = os.environ.get("VIGIL_FORCE_IPV4", "1").strip().lower() not in {"0", "false", "no"}
+
 # Whether the daemon proactively hands Claude a situation-shaped prompt (via
 # claudelink.enqueue, on a background thread — see monitor.py's _auto_enqueue) when
 # something noteworthy happens: a naked position, the kill switch, a position reaching
