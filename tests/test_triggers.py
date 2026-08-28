@@ -146,6 +146,40 @@ def test_execute_places_entry_then_guarded_sl_and_writes_seed(tmp_path, monkeypa
     assert _events(tmp_path, "TRIGGER_FIRED")
 
 
+def test_fired_event_and_detail_carry_effective_sl_pct_not_the_input(tmp_path, monkeypatch):
+    """The seed stores the width the fill actually bought; the audit event and the printed
+    detail line must agree with it.
+
+    They used not to: both echoed the caller's *input* sl_pct, so a stop widened by the
+    stop-hunt guard (or an entry that slipped between quote and fill) left the event log
+    and the console claiming a width the trade never had. An RCA reading the log then
+    computes the wrong R and the wrong risk.
+    """
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 18, 11, 0, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("RELIANCE", 1329.0)
+    # PDH 1320.80 forces the guard to push the stop below it, so the effective width
+    # necessarily differs from the 0.8% asked for.
+    t = T.Trigger("RELIANCE", "LONG", 1328.6, "above", 100, 0.008,
+                  auto=True, pdh=1320.8, pdl=1298.1)
+
+    assert T.execute(t, broker, events, FakeSession(), 1329.0) is True
+
+    fired = _events(tmp_path, "TRIGGER_FIRED")[0]["data"]
+    seed = json.loads(config.RISK_FILE.read_text())["RELIANCE"]
+
+    assert fired["sl_pct"] == seed["sl_pct"], (
+        "audit event and risk seed must report the same effective width")
+    assert fired["input_sl_pct"] == 0.008, "the requested width stays available for diffing"
+    assert fired["sl_pct"] != fired["input_sl_pct"], (
+        "guard widened the stop, so effective and input must differ here")
+
+    expected_risk = abs(fired["entry"] - fired["sl_price"]) * 100
+    assert fired["risk"] == pytest.approx(expected_risk, abs=0.01)
+    assert "effective" in t.detail and "risk" in t.detail
+
+
 def test_execute_derives_sl_from_actual_fill_not_the_trigger_level(tmp_path, monkeypatch):
     """A gap through the level must not anchor the stop to a price we never got."""
     monkeypatch.setattr(T.clock, "now_ist",
@@ -158,6 +192,39 @@ def test_execute_derives_sl_from_actual_fill_not_the_trigger_level(tmp_path, mon
     sl = kite.place_calls[1]["trigger_price"]
     assert sl > 1328.6, "SL was anchored to the trigger level, not the fill"
     assert 1330 < sl < 1340
+
+
+def test_execute_warns_but_still_places_when_guard_pushes_sl_past_the_cap(tmp_path, monkeypatch):
+    """A real live incident (2026-08-24): a 1.1% input sl_pct passed the pre-trade cap
+    check cleanly, but its raw SL (1042.55) landed within the guard's 0.3% buffer of PDH
+    (1040.45, distance 0.20%) — a real, correct guard decision since the position had just
+    broken out above it. The guard pushed the SL to 1037.33 to stay clear, which by itself
+    implies an effective width of ~1.60%, over the 1.5% cap the pre-trade check exists to
+    enforce. The position is already open by this point (entry already filled) — refusing
+    the SL leg would leave it naked, and clamping back to exactly the cap would put the
+    stop right back inside the level the guard just avoided. So this must not refuse:
+    it must place the (wider) guarded SL anyway and make the breach loud instead of only
+    discoverable later by hand-computing sl_pct from `vigil status --json`, as happened
+    live."""
+    monkeypatch.setattr(T.clock, "now_ist",
+                        lambda: datetime(2026, 8, 24, 11, 42, tzinfo=IST))
+    kite, broker, events = _bits(tmp_path)
+    kite.set_quote("HINDALCO", 1054.145)
+    t = T.Trigger("HINDALCO", "LONG", 1050.0, "above", 628, 0.011,
+                  auto=True, pdh=1040.45, pdl=1024.6)
+
+    assert T.execute(t, broker, events, FakeSession(), 1054.145) is True, \
+        "a post-guard cap breach must not block placing the SL"
+
+    sl = kite.place_calls[1]["trigger_price"]
+    effective = abs(1054.145 - sl) / 1054.145
+    assert effective > 0.015, f"test setup didn't actually breach the cap, sl={sl}"
+
+    warnings = _events(tmp_path, "SL_CAP_EXCEEDED_POST_GUARD")
+    assert len(warnings) == 1
+    assert warnings[0]["symbol"] == "HINDALCO"
+    assert warnings[0]["data"]["input_sl_pct"] == 0.011
+    assert warnings[0]["data"]["effective_sl_pct"] == round(effective, 4)
 
 
 def test_execute_rounds_sl_to_the_symbols_own_tick_not_the_nse_default(tmp_path, monkeypatch):

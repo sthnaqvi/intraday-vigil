@@ -8,7 +8,7 @@ import sys
 import time
 from datetime import datetime, timedelta
 
-from .. import auth, clock, config, notify
+from .. import auth, clock, config, netconfig, notify
 from ..monitor import MonitorLoop
 from ..state import SessionState
 from ._shared import _daemon_pid, _live_broker, _pidfile_is_mine, is_paper_mode, set_paper_mode
@@ -51,6 +51,10 @@ def cmd_start(args) -> int:
     set_paper_mode(paper)
     if not paper:
         auth.login(paste=args.paste)  # fast-path returns instantly on a valid token
+        # A successful login proves the READ path only. Record which IP family orders
+        # will leave on, so a whitelist mismatch shows up here rather than as a
+        # rejected order hours later. See docs/incidents/verification-gaps.md.
+        netconfig.log_egress_family()
     if (pid := _daemon_pid()) is not None:
         print(f"Daemon already running (pid {pid}). `vigil status` to inspect.")
         return 0

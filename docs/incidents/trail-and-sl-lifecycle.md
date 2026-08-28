@@ -51,3 +51,39 @@ sat completely unprotected until the session ended.
 more per share, it can make the entire breakeven/trail mechanism structurally unreachable
 within a normal session. This is why `vigil` refuses `sl_pct > 1.5%` everywhere an SL is
 set (`enter`, `arm`, `add`, `protect`), rather than treating it as an advisory cap.
+
+## The cap check ran before the guard that could break it
+
+An entry's input `sl_pct` was safely under the cap and passed the refusal check cleanly.
+The stop-hunt guard then ran afterward — correctly, on its own terms — and widened the SL
+because the raw pre-guard price landed within the guard's buffer of a level the position
+had just broken out through. Nothing re-validated the *result* against the cap. The
+position ended up with an SL a fraction over 1.5%, silently, because the check and the
+step that could invalidate it ran in the wrong order.
+
+**Lesson:** a cap check is only as good as what it checks last. If a downstream step can
+still move the value after validation, the cap isn't actually enforced — it's enforced on
+an intermediate value that isn't the one that ends up live. Validate the final state, not
+the input.
+
+## An aggregate profit swing had zero protection because R is per-position
+
+Three simultaneously open positions produced an aggregate unrealized profit of several
+thousand rupees at its peak — a genuinely large number. Not one of the three positions had
+individually crossed its own 1.0R breakeven threshold at that moment; the phase lifecycle
+is computed strictly per-position, from that position's own entry and SL width. The entire
+aggregate gain therefore carried no mechanical protection whatsoever, and round-tripped
+back through flat into a loss within the same hour — nothing had moved, because nothing
+was individually due to move.
+
+Nobody watching caught it either. Every status check reported each position's own number
+correctly; none of them framed "the total is unusually large relative to what's actually
+protected" as a decision point, because nothing in the render compares the aggregate to
+any individual position's protection state.
+
+**Lesson:** a large green *total* is not the same claim as "some position has earned
+protection." R-multiples are computed per-position by design — that's correct for sizing
+and for the phase mechanics themselves — but it means a portfolio can look excellent in
+aggregate while every individual leg remains fully exposed. A system (or a habit) that only
+ever asks "what's my total P&L" and never "what's my most-exposed position's own R" will
+miss this every time it happens.

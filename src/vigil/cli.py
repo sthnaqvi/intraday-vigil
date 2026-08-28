@@ -11,7 +11,7 @@ import sys
 import time
 import traceback
 
-from . import audit, auth
+from . import audit, auth, netconfig
 from .commands.armed import (
     cmd_arm,
     cmd_arm_exit,
@@ -38,6 +38,9 @@ from .events import setup_logging
 
 def main(argv: list[str] | None = None) -> int:
     setup_logging()
+    # Before any broker call: make the egress address deterministic so it can match a
+    # broker's order-endpoint IP whitelist. See netconfig.py.
+    netconfig.apply()
     p = argparse.ArgumentParser(prog="vigil",
                                 description="Intraday SL-lifecycle daemon")
     sub = p.add_subparsers(dest="cmd", required=True)

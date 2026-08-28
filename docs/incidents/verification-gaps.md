@@ -178,3 +178,83 @@ that's wrong by default corrupts every later read of the session's own history, 
 **Fix:** when reconciliation finds a tracked position closed with no local order or trigger
 record explaining it, label it as unexplained rather than defaulting to the same label used
 for a real, observed manual exit.
+
+## A daemon reported "live and managing positions" while its order path was dead
+
+The daemon started cleanly: broker login succeeded, the token was saved, the instrument
+master verified every reference token, and it printed that it was live and already managing
+positions. Every read path then worked, and kept working for the entire session — quotes
+across the full sector universe, account margins, daily and intraday candles for a dozen
+symbols. Nothing in any output suggested a problem.
+
+The first order attempt failed outright. The broker applies its static-IP whitelist to
+**order** endpoints only; read endpoints ignore it entirely. The host was dual-stack, with
+IPv6 winning the default route, so every API call egressed from an address that was not the
+whitelisted one. The whitelist itself was configured correctly — the whitelisted address
+simply wasn't the one in use. Read traffic never cared, which is precisely why the failure
+stayed invisible until an order was attempted.
+
+No money was at risk on the session this happened, because no position was open. The real
+exposure is the other case. Had a position been open, the daemon would have reported live,
+logged clean cycles and rendered a healthy status — while being unable to execute its
+breakeven move, its trail, or its scheduled square-off, since placing, modifying and
+cancelling orders are all order-API calls. The position would have fallen through to the
+exchange's own forced square-off with the daemon logging failures the whole way.
+
+A per-process workaround existed and was deliberately declined. The entry command places the
+entry and its stop within a single process, so forcing just that process onto the working
+route would have opened the position with a stop attached — while the daemon, a separate
+process still on the broken route, could not have managed it afterwards. Opening a position
+under that condition is strictly worse than not trading at all.
+
+Two things worth recording about the fix itself. First, the obvious mechanism for a
+venv-wide network override — dropping a `sitecustomize.py` into site-packages — silently did
+nothing, because some Python distributions ship their own `sitecustomize.py` in the standard
+library directory, which wins the import and shadows the venv copy. No error, no warning; the
+first attempt simply had no effect. A `.pth` file that imports a differently-named module
+works, because `site` executes those unconditionally. Second, the fix was verified by
+inspecting the *daemon process's own* established connections, not by re-running a one-off
+command — a one-off proves only that one process was fixed, which is exactly the failure
+mode being guarded against.
+
+**Fix still owed:** startup verifies the token, the instrument master and the read APIs,
+then declares itself live — it never checks that it can place an order. The proposal is a
+preflight at daemon start, when the market is open: place a single-share limit order far
+enough from market that it cannot fill, confirm the broker accepts it, cancel it
+immediately, and refuse to report "live" if it is rejected. The cost is one order and a
+cancel; the benefit is converting a silent capability gap into a loud startup failure. An
+egress-address check against a configured expected value is cheaper but strictly weaker — it
+proves which address is being used, not that the broker will accept orders from it.
+
+**Rule:** a process that has proven it can *read* has proven nothing about whether it can
+*act*. Anything trusted to protect a position must verify the write path before claiming to
+be protecting anything.
+## An approved risk figure was never re-checked against the fill that replaced it
+
+A long was quoted to the user at a specific price, with a stop derived from that price, an
+effective stop width just above one percent, and a total rupee risk the user explicitly
+approved before the order went in. The order filled a little under a quarter of a percent
+higher — ordinary slippage in the seconds between quoting and placing.
+
+The daemon behaved correctly throughout. It re-derived the stop from the *actual* fill with
+the stop-hunt guard applied, and wrote the true effective stop percentage into the risk seed,
+so the seed and the resting exchange order agreed exactly. Nothing in the system was
+inconsistent.
+
+What was inconsistent was the number the human was working from. Measured against the real
+fill, the position carried close to twenty percent more rupee risk than the figure approved,
+and its effective stop width had moved from comfortably inside the cap to sitting a few
+hundredths of a percent below it.
+
+The extra risk was not the damage. A stop that wide puts the 1R breakeven trigger *above*
+the prior day's high — so the position could not reach the breakeven phase without first
+clearing a major resistance level, and the entire protect-then-trail lifecycle was
+unreachable from the instant of the fill. Nobody was told, because the approved plan's
+numbers were never restated. The position went on to run several R in the user's favour on
+paper and was closed manually at a fraction of that, with the daemon never having been able
+to protect any of it.
+
+**Fix:** the approval is on the plan; the fill is the trade. After every entry, recompute the
+rupee risk and the effective stop percentage from the fill and report both before anything
+else — and when the fill moves either materially, say so unprompted rather than letting the
+approved figure stand unchallenged as the record of what was taken.
