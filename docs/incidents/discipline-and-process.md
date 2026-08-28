@@ -208,3 +208,36 @@ than about two bars old, what is on offer is a retest — different levels, diff
 different odds. Re-derive it as that trade or skip it, but do not place the breakout order
 against it. And when two candidates score equally, splitting is a real option: put it on the
 list rather than forcing a choice between them.
+
+## A position was doubled after the cutoff, and its R improved while its risk grew
+
+Late in a session — well past the hard no-new-entries cutoff, with the kill switch already
+active, and a handful of minutes before the daemon's own scheduled square-off — a market
+order nearly doubled an existing position. It was placed directly at the broker rather than
+through the daemon, which only learned of it by reconciliation; an attempt to stop the daemon
+followed within half a minute and was refused by the guard.
+
+Two things are worth separating here. The first is the obvious one: the added risk had
+essentially no managed session left in which to work, and the position was force-closed
+minutes later at the venue's own square-off.
+
+The second is subtler and is the reason this is recorded at all. Averaging into the position
+moved the average entry closer to the market while the resting stop stayed where it was.
+That *increased* the position's 1R currency value — more shares, each risking slightly less
+to the same stop price — so the same unrealised loss suddenly read as a much smaller R
+multiple. Roughly: a position sitting near −0.4R before the add showed under −0.2R
+immediately afterwards, having moved not at all. Meanwhile the actual currency at risk to
+the stop had risen by about two-thirds.
+
+Anyone watching R alone — which is the metric the whole lifecycle is built on — would have
+read the position as having become materially safer at the precise moment its real exposure
+grew. R is a ratio, and adding to a position changes its denominator.
+
+**Fix:** no code path can block an order placed directly at the broker, so the guard here is
+procedural. What is transferable is the metric discipline: on any quantity change, report the
+currency risk delta alongside the R, and treat an R that improves because of an add as an
+artefact of the denominator rather than a signal about the trade. A related defect surfaced
+in the same event — the stored risk seed kept its original stop percentage after the average
+entry moved, leaving the seed and the resting order disagreeing about the stop's width, which
+would have mis-set the trail multiple had the position ever reached the trailing phase.
+
